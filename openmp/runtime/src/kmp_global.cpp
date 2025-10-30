@@ -352,7 +352,11 @@ omp_memspace_handle_t const kmp_max_mem_space =
 KMP_BUILD_ASSERT(sizeof(kmp_tasking_flags_t) == 4);
 
 int __kmp_task_stealing_constraint = 1; /* Constrain task stealing by default */
-int __kmp_enable_task_throttling = 1;
+
+// OMPC NOTE: Task throttling makes the control thread execute the encountered
+// tasks when more than 256 tasks wait for execution. It must be disabled so the
+// complete task graph is built before any task execution.
+int __kmp_enable_task_throttling = 0;
 
 #ifdef DEBUG_SUSPEND
 int __kmp_suspend_count = 0;
@@ -562,6 +566,8 @@ kmp_int32 __kmp_curr_tdg_idx =
     0; // Id of the current TDG being recorded or executed
 kmp_int32 __kmp_num_tdg = 0;
 kmp_int32 __kmp_successors_size = 10; // Initial succesor size list for
+                                      // recording
+kmp_int32 __kmp_predecessors_size = 10; // Initial predecessor size list for
                                       // recording
 std::atomic<kmp_int32> __kmp_tdg_task_id = 0;
 #endif

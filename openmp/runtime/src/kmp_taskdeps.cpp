@@ -260,6 +260,18 @@ static inline void __kmp_track_dependence(kmp_int32 gtid, kmp_depnode_t *source,
 
       kmp_node_info_t *sink_info =
           &(task_sink->tdg->record_map[task_sink->td_tdg_task_id]);
+
+      if (sink_info->npredecessors+1 >= sink_info->predecessors_size) {
+        kmp_int32 old_predecessors_size = sink_info->predecessors_size;
+        sink_info->predecessors_size = 2 * sink_info->predecessors_size;
+        kmp_int32 *old_pred_ids = sink_info->predecessors;
+        kmp_int32 *new_pred_ids = (kmp_int32 *)__kmp_allocate(
+            sink_info->predecessors_size * sizeof(kmp_int32));
+        KMP_MEMCPY(new_pred_ids, old_pred_ids, old_predecessors_size * sizeof(kmp_int32));
+ 	sink_info->predecessors = new_pred_ids;
+        __kmp_free(old_pred_ids);
+      }
+      sink_info->predecessors[sink_info->npredecessors]=task_source->td_tdg_task_id;
       sink_info->npredecessors++;
     }
   }
@@ -863,17 +875,29 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
         KMP_MEMCPY(new_record, tdg->record_map,
                    old_size * sizeof(kmp_node_info_t));
         tdg->record_map = new_record;
+        for(kmp_int i =0; i<old_size;i++){
+          old_record[i].target_data = nullptr;
+        }
 
         __kmp_free(old_record);
 
         for (kmp_int i = old_size; i < new_size; i++) {
           kmp_int32 *successorsList = (kmp_int32 *)__kmp_allocate(
               __kmp_successors_size * sizeof(kmp_int32));
+          kmp_int32 *predecessorsList = (kmp_int32 *)__kmp_allocate(
+              __kmp_predecessors_size * sizeof(kmp_int32));
+          kmp_recorded_task_time_t *taskTimeList = (kmp_recorded_task_time_t *)__kmp_allocate(
+              omp_get_num_devices() * sizeof(kmp_recorded_task_time_t));
           new_record[i].task = nullptr;
           new_record[i].successors = successorsList;
+          new_record[i].predecessors = predecessorsList;
           new_record[i].nsuccessors = 0;
           new_record[i].npredecessors = 0;
           new_record[i].successors_size = __kmp_successors_size;
+          new_record[i].predecessors_size = __kmp_predecessors_size;
+          new_record[i].is_target_task = 0;
+          new_record[i].target_data = new kmp_target_task_data_t();
+          new_record[i].task_time = taskTimeList;
           KMP_ATOMIC_ST_REL(&new_record[i].npredecessors_counter, 0);
         }
         // update the size at the end, so that we avoid other
@@ -885,6 +909,16 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
     tdg->record_map[new_taskdata->td_tdg_task_id].task = new_task;
     tdg->record_map[new_taskdata->td_tdg_task_id].parent_task =
         new_taskdata->td_parent;
+    tdg->record_map[new_taskdata->td_tdg_task_id].is_target_task = (new_taskdata->td_target_info != nullptr);
+    tdg->record_map[new_taskdata->td_tdg_task_id].target_data = new_taskdata->td_target_info;
+    
+    for ( kmp_int32 device = 0 ; device < omp_get_num_devices() ; device++){
+      tdg->record_map[new_taskdata->td_tdg_task_id].task_time[device].mean_time = -1 ;    
+      tdg->record_map[new_taskdata->td_tdg_task_id].task_time[device].iteration_number = 0   ;    
+    }
+    __kmpc_set_deps(&tdg->record_map[new_taskdata->td_tdg_task_id], ndeps, dep_list, ndeps_noalias,
+                    noalias_dep_list);
+
     KMP_ATOMIC_INC(&tdg->num_tasks);
   }
 #endif
@@ -962,6 +996,12 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
   }
 #endif /* OMPT_OPTIONAL */
 #endif /* OMPT_SUPPORT */
+
+#if OMPX_TASKGRAPH
+  // Add task to libomptarget task graph
+  __kmpc_add_target_task_with_deps(new_taskdata, ndeps, dep_list, ndeps_noalias,
+                                   noalias_dep_list);
+#endif
 
   bool serial = current_task->td_flags.team_serial ||
                 current_task->td_flags.tasking_ser ||
