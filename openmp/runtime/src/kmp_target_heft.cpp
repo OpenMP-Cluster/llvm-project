@@ -284,7 +284,7 @@ void HEFTContext::homogeneousInterpolation() {
   computeAvgCompCosts();
   for (auto Taskptr : TopologicalOrder(tdg)){
     double average_value = AverageComputationCost[Taskptr];
-    for( kmp_int32 device = 0; device < omp_get_num_devices(); device++ ) {
+    for( kmp_int32 device = 0; device < __kmpc_get_num_devices(); device++ ) {
       if(!ComputationCost[Taskptr].count(device))
         ComputationCost[Taskptr][device] = average_value;
     }
@@ -293,7 +293,7 @@ void HEFTContext::homogeneousInterpolation() {
 
 void HEFTContext::generalProportionalInterpolation() {
 
-  kmp_int32 device_number = omp_get_num_devices();
+  kmp_int32 device_number = __kmpc_get_num_devices();
   std::vector<std::vector<double>> beta(device_number,std::vector<double>(device_number,-1.0)); // We want to compute the betas (proportional coefficient between the devices' speeds)
 
 //Computation of the Betas
@@ -483,7 +483,7 @@ void HEFTContext::extrapolateCompCost(kmp_int32 scheduling_iteration_counter, km
 
   bool is_incomplete_profile = false; 
   for (auto Taskptr : TopologicalOrder(tdg)){
-    for( kmp_int32 device = 0; device < omp_get_num_devices(); device++ ) {
+    for( kmp_int32 device = 0; device < __kmpc_get_num_devices(); device++ ) {
       if(isTargetDataTask(*Taskptr)) { 
         ComputationCost[Taskptr][device]= 1.0;
       }
@@ -630,7 +630,7 @@ void HEFTScheduler::scheduleGraph() {
   using detail::DeviceId;
   acquireNewGraphPost();
   auto PQueue = Ctx.buildQueue();
-  auto NumDevices = omp_get_num_devices();
+  auto NumDevices = __kmpc_get_num_devices();
   auto Devices = Ctx.buildDeviceList(NumDevices);
 
   KG_TRACE(10,("[SCHEDULER] Scheduling graph with HEFT algorithm:\n"));

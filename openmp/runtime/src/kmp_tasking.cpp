@@ -17,6 +17,8 @@
 #include "kmp_wait_release.h"
 #include "kmp_taskdeps.h"
 
+#include <chrono>
+
 #if OMPT_SUPPORT
 #include "ompt-specific.h"
 #endif
@@ -1753,7 +1755,6 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
     input_flags.hidden_helper = TRUE;
 
   kmp_task_t *retval = __kmpc_omp_task_alloc(
-<<<<<<< HEAD
     loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry);
 
   // Add more information about the target task in the wrapper task data
@@ -1772,8 +1773,6 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   kmp_target_task_data_t *td_target_info =
       new kmp_target_task_data_t(device_id, outlined_fn_id, num_args, args_base,
                                  args, arg_sizes, arg_types);
-
-  kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(retval);
   taskdata->td_target_info = td_target_info;
 #endif
   return retval;
@@ -2114,7 +2113,7 @@ kmp_int32 __kmp_omp_task(kmp_int32 gtid, kmp_task_t *new_task,
           kmp_int32 *predecessorsList = (kmp_int32 *)__kmp_allocate(
               __kmp_predecessors_size * sizeof(kmp_int32));
           kmp_recorded_task_time_t *taskTimeList = (kmp_recorded_task_time_t *)__kmp_allocate(
-              omp_get_num_devices() * sizeof(kmp_recorded_task_time_t));
+              __kmpc_get_num_devices() * sizeof(kmp_recorded_task_time_t));
           new_record[i].task = nullptr;
           new_record[i].successors = successorsList;
           new_record[i].predecessors = predecessorsList;
@@ -5690,7 +5689,7 @@ static inline void __kmp_start_record(kmp_int32 gtid,
     kmp_int32 *predecessorsList =
         (kmp_int32 *)__kmp_allocate(__kmp_predecessors_size * sizeof(kmp_int32));
     kmp_recorded_task_time_t *taskTimeList = 
-        (kmp_recorded_task_time_t *)__kmp_allocate(omp_get_num_devices() * sizeof(kmp_recorded_task_time_t));
+        (kmp_recorded_task_time_t *)__kmp_allocate(__kmpc_get_num_devices() * sizeof(kmp_recorded_task_time_t));
     this_record_map[i].task = nullptr;
     this_record_map[i].successors = successorsList;
     this_record_map[i].predecessors = predecessorsList;

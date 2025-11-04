@@ -17,6 +17,23 @@
 #include "kmp_target_graph_roundrobin.h"
 #include "kmp_target_roundrobin.h"
 
+#if ENABLE_LIBOMPTARGET
+static int (*omp_get_num_devices)(void) = nullptr;
+static bool init = 0;
+
+void __kmp_init_omp_get_num_devices(){
+   *(void **)(&omp_get_num_devices) = KMP_DLSYM("omp_get_num_devices");
+}
+#endif
+
+int __kmpc_get_num_devices(){
+  if (!init){
+    init = 1;
+    __kmp_init_omp_get_num_devices();
+  }
+  return omp_get_num_devices();
+}
+
 // Strings allowed to be passed in the OMPCLUSTER_SCHEDULER environment
 // variable.
 // NOTE: Update this when adding a new scheduler.
@@ -200,7 +217,7 @@ void __kmpc_scheduler_update_weights(){
 void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg){
   for ( kmp_int32 tdg_task_id = 0; tdg_task_id < tdg->num_tasks ; tdg_task_id++){
      printf("[Inter HEFT]: Task %d:\n",tdg_task_id);
-    for (kmp_int32 device = 0 ; device < omp_get_num_devices(); device++) {
+    for (kmp_int32 device = 0 ; device < __kmpc_get_num_devices(); device++) {
      printf("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number);
     } 
      printf("\n");

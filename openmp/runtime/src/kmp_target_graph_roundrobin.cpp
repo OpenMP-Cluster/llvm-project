@@ -13,13 +13,14 @@
 
 #include "kmp_target_graph_roundrobin.h"
 #include <algorithm>
+#include "kmp.h"
 
 void GraphRoundRobinScheduler::scheduleGraph() {
 
   // Graph based round-robin algorithm.
   int task_counter = 0;
 
-  int NumDevices = omp_get_num_devices();
+  int NumDevices = __kmpc_get_num_devices();
   for (auto &map_entry : schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;

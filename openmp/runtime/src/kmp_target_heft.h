@@ -15,6 +15,7 @@
 #define _OMPTARGET_HEFT_H
 
 #include "kmp_target_basescheduler.h"
+#include "kmp.h" 
 
 #include <deque>
 

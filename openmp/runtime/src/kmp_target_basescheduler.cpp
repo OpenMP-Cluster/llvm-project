@@ -23,6 +23,7 @@ BaseScheduler::BaseScheduler()
     : remaining_target_tasks(0), non_nowait_counter(0),
       non_task_scheduler(NonTaskScheduler::STATIC), graph_dump_dir_path(),
       graph_counter(0), schedule_map() {
+
   // Read environment variables
   if (char *env_str = std::getenv("OMPCLUSTER_TASK_GRAPH_DUMP_PATH")) {
     graph_dump_dir_path = env_str;
@@ -168,7 +169,7 @@ void BaseScheduler::acquireAndScheduleGraph(kmp_tdg_info_t* tdg) {
 int32_t BaseScheduler::scheduleTask(int32_t task_id) {
 
   KG_TRACE(10,("scheduleTask start, task_id: %d\n",task_id));
-  int active_devices_number = omp_get_num_devices();
+  int active_devices_number = __kmpc_get_num_devices();
   int scheduled_id = -1;
   if (task_id == -1) {	  
     // If the target region is not inside a task (non-nowait), use the
@@ -358,7 +359,7 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
   // With offset on the device
   int task_counter = 0;
 
-  int NumDevices = omp_get_num_devices();
+  int NumDevices = __kmpc_get_num_devices();
   for (auto &map_entry : schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;

@@ -3160,12 +3160,13 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
   std::atomic<bool> th_blocking;
 #endif
   kmp_cg_root_t *th_cg_roots; // list of cg_roots associated with this thread
-} kmp_base_info_t;
-
 #ifdef OMPX_TASKGRAPH 
   // Indicates whether this thread is executing tasks
   std::atomic<int32_t> th_tasking_level;
 #endif
+
+
+} kmp_base_info_t;
 
 typedef union KMP_ALIGN_CACHE kmp_info {
   double th_align; /* use worst case alignment */
@@ -3402,6 +3403,7 @@ extern int kmp_c_debug;
 extern int kmp_d_debug;
 extern int kmp_e_debug;
 extern int kmp_f_debug;
+extern int kmp_g_debug;
 #endif /* KMP_DEBUG */
 
 /* For debug information logging using rotating buffer */
@@ -4666,7 +4668,7 @@ extern void __kmp_omp_display_env(int verbose);
 
 /* ------------------------------------------------------------------------ */
 
-#ifdef USE_TARGET_TASK
+#ifdef OMPX_TASKGRAPH
 
 // The target nowait regions are encapsulated inside OpenMP tasks, which makes
 // any libomptarget device oblivious of any task structure. To pass the OpenMP
@@ -4843,7 +4845,8 @@ KMP_EXPORT kmp_target_dep __kmpc_getDep(int32_t task_id, int64_t addr);
 KMP_EXPORT void __kmpc_dumpTaskGraph();
 KMP_EXPORT const void *__kmpc_GetCurrentOutlinedFnID();
 //KMP_EXPORT std::set<int> __kmpc_getDataTaskSuccessors(int32_t task_id);
-int omp_get_num_devices(void) __attribute__((weak));
+int __kmpc_get_num_devices();
+
 
 //Main scheduling function: Retrieve and schedule the taskgraph if needed
 void __kmpc_scheduleGraph(kmp_tdg_info_t* tdg);

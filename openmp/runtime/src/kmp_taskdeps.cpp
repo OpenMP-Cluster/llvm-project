@@ -887,7 +887,7 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
           kmp_int32 *predecessorsList = (kmp_int32 *)__kmp_allocate(
               __kmp_predecessors_size * sizeof(kmp_int32));
           kmp_recorded_task_time_t *taskTimeList = (kmp_recorded_task_time_t *)__kmp_allocate(
-              omp_get_num_devices() * sizeof(kmp_recorded_task_time_t));
+              __kmpc_get_num_devices() * sizeof(kmp_recorded_task_time_t));
           new_record[i].task = nullptr;
           new_record[i].successors = successorsList;
           new_record[i].predecessors = predecessorsList;
@@ -912,7 +912,7 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
     tdg->record_map[new_taskdata->td_tdg_task_id].is_target_task = (new_taskdata->td_target_info != nullptr);
     tdg->record_map[new_taskdata->td_tdg_task_id].target_data = new_taskdata->td_target_info;
     
-    for ( kmp_int32 device = 0 ; device < omp_get_num_devices() ; device++){
+    for ( kmp_int32 device = 0 ; device < __kmpc_get_num_devices() ; device++){
       tdg->record_map[new_taskdata->td_tdg_task_id].task_time[device].mean_time = -1 ;    
       tdg->record_map[new_taskdata->td_tdg_task_id].task_time[device].iteration_number = 0   ;    
     }
