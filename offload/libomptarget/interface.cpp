@@ -192,6 +192,7 @@ EXTERN void __tgt_target_data_begin_mapper(ident_t *Loc, int64_t DeviceId,
                           ArgTypes, ArgNames, ArgMappers, targetDataBegin,
                           "Entering OpenMP data region with being_mapper",
                           "begin");
+  MarkExecutedTask(DeviceId);
 }
 
 EXTERN void __tgt_target_data_begin_nowait_mapper(
@@ -396,11 +397,16 @@ EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                KernelArgsTy *KernelArgs) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
-  if (KernelArgs->Flags.NoWait)
-    return targetKernel<TaskAsyncInfoWrapperTy>(
+  if (KernelArgs->Flags.NoWait) {
+    int Rc = targetKernel<TaskAsyncInfoWrapperTy>(
         Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
-  return targetKernel<AsyncInfoTy>(Loc, DeviceId, NumTeams, ThreadLimit,
+    MarkExecutedTask(DeviceId);
+  return Rc;
+  }
+  int Rc = targetKernel<AsyncInfoTy>(Loc, DeviceId, NumTeams, ThreadLimit,
                                    HostPtr, KernelArgs);
+  MarkExecutedTask(DeviceId);
+  return Rc;
 }
 
 /// Activates the record replay mechanism.

@@ -23,8 +23,8 @@
 //void DeinitScheduler() { __kmpc_DeinitScheduler(); }
 
 int Schedule(ident_t *Loc, int DeviceId) {
-  // Do not schedule non-mpi-target devices.
-  const RTLInfoTy *DeviceRTL = PM->Devices[DeviceId]->RTL;
+// Do not schedule non-mpi-target devices.
+//  const RTLInfoTy *DeviceRTL = PM->Devices[DeviceId]->RTL;
 //  if (!DeviceRTL->IsMPI || DeviceRTL->DisableDataManager) {
 //    return DeviceId;
 //  }
@@ -47,7 +47,8 @@ int Schedule(ident_t *Loc, int DeviceId) {
 //  int OldExecCount = -1;
   std::atomic<int> *ExecCount = nullptr;
 //  do {
-    ScheduledDevId = DeviceRTL->Idx + __kmpc_scheduleTask(TaskId);
+//    ScheduledDevId = DeviceRTL->Idx + __kmpc_scheduleTask(TaskId);
+    ScheduledDevId = __kmpc_scheduleTask(TaskId);
 //    ExecCount = &PM->Devices[ScheduledDevId]->ExecCount;
 
     // Set OldExecCount to its expected value for a successfull scheduling.
@@ -78,13 +79,13 @@ void PinTask(ident_t *Loc, int DeviceId) {
 
 void MarkExecutedTask(int DeviceId) {
   // Non-mpi-target devices were not scheduled.
-  DeviceTy &Device = *PM->Devices[DeviceId];
+//  DeviceTy &Device = *PM->Devices[DeviceId];
   //if (!Device.RTL->IsMPI || Device.RTL->DisableDataManager) {
   //  return;
   //}
 
   // Update counter of in flight regions.
-  Device.ExecCount--;
+//  Device.ExecCount--;
   const int32_t TaskId = __kmpc_target_task_current_task_id();
   if (TaskId != -1) {
     __kmpc_setTaskStateWithDevice(TaskId, DeviceId, TaskState::EXECUTED);
