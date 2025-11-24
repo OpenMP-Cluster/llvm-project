@@ -4866,6 +4866,7 @@ void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg);
 kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
 kmp_int32 __kmpc_curr_tdg_idx();
 
+void __kmpc_remove_task(kmp_task_t, kmp_task_t);//Remove tasks and the related dependencies
 #endif
 
 // 1: it is initializing hidden helper team

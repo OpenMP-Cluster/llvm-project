@@ -725,6 +725,8 @@ void HEFTScheduler::scheduleGraph() {
   assert(std::all_of(schedule_map.begin(), schedule_map.end(), Predicate) &&
          "Some tasks were not properly scheduled.");
 
+  addMemoryTasks();
+
   Ctx.dump(NumDevices);
   KG_TRACE(10,("[SCHEDULER] End HEFT schedule.\n"));
 }

@@ -43,6 +43,8 @@ void GraphRoundRobinScheduler::scheduleGraph() {
       task_schedule.rank = (task_counter++ % NumDevices) + 1;
     }
   }
+  
+  addMemoryTasks();
 
   assert(std::none_of(schedule_map.begin(), schedule_map.end(),
                       [](const auto &entry) {

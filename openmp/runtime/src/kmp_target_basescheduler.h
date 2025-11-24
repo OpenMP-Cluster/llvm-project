@@ -84,6 +84,8 @@ protected:
   int graph_counter;
 
   ScheduleMap schedule_map;
+  std::vector<*kmp_task_t> memory_task_vec;
+
 
   int32_t schedulingThread = -1;
   bool isScheduleDone;
@@ -118,9 +120,11 @@ public:
   void resetSchedulingThread();
   bool isSchedulingThread(int32_t gtid); 
   void resetTasksState();
+  void resetMemoryTasks();
   void resetTasksRank();
   void scheduleGraphRR(kmp_int32 offset);
   bool is_rescheduling();
+  void addMemoryTasks();
 
 private:
   /// Wait for OpenMP to create its graph

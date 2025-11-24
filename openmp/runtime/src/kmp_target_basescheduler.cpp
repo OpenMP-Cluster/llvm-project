@@ -310,6 +310,38 @@ kmp_target_dep BaseScheduler::getDep(int32_t task_id, int64_t addr) {
   return dep;
 }
 
+void BaseScheduler::addMemoryTasks(){
+
+  for (auto &map_entry : schedule_map) {
+    TaskScheduleData &task_schedule = map_entry.second;
+    auto &task = task_schedule.task;
+    kmp_int32 task_rank = task_schedule.rank;
+    if (isTargetDataTask(task))
+      continue;
+    for (int32_t idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
+      auto successor = &(tdg->record_map[task->successors[idx_succ]]);
+      if (isTargetDataTask(successor)
+        continue;
+      auto successor_rank = schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
+      if (successor_rank != task_rank)
+	{
+	if(successor.target_data !=nullptr && task.target_data!=nullptr){
+          for (int32_t I = 0; I < task.target_data->num_args; I++) {
+            for (int32_t J = 0; J < successor.target_data->num_args; J++) {
+              if (successor.target_data->args[I] == successor.target_data->args[J]) {
+         	__kmp_task_t* memory_task;
+		//TODO: __kmpc_create_memory_task(task,successor,task_rank, successor_rank, task.target_data->arg_sizes[I]);
+        	memory_task_vec.push(memory_task);
+              }
+            }
+          }
+        }
+      }
+    }  
+  }
+
+}
+
 
 void BaseScheduler::waitScheduleGraph(){
 
@@ -353,8 +385,14 @@ void BaseScheduler::resetTasksRank(){
   }
 }
 
-void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
+void BaseScheduler::resetMemoryTasks(){
+  for (auto& task : memory_task_vec){
+    __kmpc_remove_task(task);
+  }
+  memory_task_vec.clear();
+}
 
+void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
   // Graph based round-robin algorithm.
   // With offset on the device
   int task_counter = 0;
@@ -406,6 +444,8 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
     task_schedule.rank = Rank;
     task_schedule.state = TaskState::SCHEDULED;
   }
+
+  addMemoryTasks();
 
   assert(std::none_of(schedule_map.begin(), schedule_map.end(),
                       [](const auto &entry) {
