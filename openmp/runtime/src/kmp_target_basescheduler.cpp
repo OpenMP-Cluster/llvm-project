@@ -318,6 +318,8 @@ void BaseScheduler::addMemoryTasks(){
     kmp_int32 task_rank = task_schedule.rank;
     if (isTargetDataTask(task))
       continue;
+  //  vector<kmp_task_and_pred> new_memory_task = __kmp_insert_memory_tasks_with_deps(//TODO
+  //  memory_task_vec.insert(memory_task_vec.end(),new_memory_task.begin(),new_memory_task.end());
     for (int32_t idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       auto successor = &(tdg->record_map[task->successors[idx_succ]]);
       if (isTargetDataTask(successor)
@@ -329,15 +331,14 @@ void BaseScheduler::addMemoryTasks(){
           for (int32_t I = 0; I < task.target_data->num_args; I++) {
             for (int32_t J = 0; J < successor.target_data->num_args; J++) {
               if (successor.target_data->args[I] == successor.target_data->args[J]) {
-         	__kmp_task_t* memory_task;
-		//TODO: __kmpc_create_memory_task(task,successor,task_rank, successor_rank, task.target_data->arg_sizes[I]);
-        	memory_task_vec.push(memory_task);
+          	__kmp_task_t* memory_task= __kmpc_create_memory_task(0,task,successor,task_rank, successor_rank,task.target_data->args[I] ,task.target_data->arg_sizes[I],true);
+        	memory_task_vec.push({task, memory_task});
               }
             }
           }
         }
       }
-    }  
+    } 
   }
 
 }
@@ -386,8 +387,8 @@ void BaseScheduler::resetTasksRank(){
 }
 
 void BaseScheduler::resetMemoryTasks(){
-  for (auto& task : memory_task_vec){
-    __kmpc_remove_task(task);
+  for (auto& [pred,task] : memory_task_vec){
+    __kmpc_remove_task(task,pred);
   }
   memory_task_vec.clear();
 }

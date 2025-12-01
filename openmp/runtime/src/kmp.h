@@ -159,6 +159,7 @@ class kmp_stats_list;
 #include <string>
 #include <set>
 #include <chrono>
+#include <vector>
 #endif
 
 #ifndef UNLIKELY
@@ -2878,7 +2879,7 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
   kmp_int32 td_tdg_task_id; // local task id in its TDG
   kmp_target_task_data_t *td_target_info; // Pointer to target nowait data info
 #endif
-  kmp_target_data_t td_target_data;
+  kmp_target_data_t td_target_data; //TODO: remove this
 }; // struct kmp_taskdata
 
 // Make sure padding above worked
@@ -4867,6 +4868,13 @@ kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
 kmp_int32 __kmpc_curr_tdg_idx();
 
 void __kmpc_remove_task(kmp_task_t, kmp_task_t);//Remove tasks and the related dependencies
+
+typedef struct kmp_task_and_pred {
+  kmp_task_t * pred;
+  kmp_task_t * task;
+}
+
+kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph);
 #endif
 
 // 1: it is initializing hidden helper team

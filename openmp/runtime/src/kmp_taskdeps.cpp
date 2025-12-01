@@ -689,13 +689,89 @@ typedef struct kmp_memory_task_args {
   size_t SrcOffset;
 } kmp_memory_task_args_t;
 
-static kmp_int32
+
+kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph){
+  // Lambda function that apply the task
+  // TODO: update this function to do real memory transfer
+  auto Fn = +[](int gtid, kmp_task_t *task) {
+    auto *mem_task_args =
+     reinterpret_cast<kmp_memory_task_args_t *>(task->shareds);
+    printf("Memory Task: ");
+    printf("dst_device=%d, src_device=%d, hst_ptr=%p\n",
+    mem_task_args->DstDevice, mem_task_args->SrcDevice, mem_task_args->Dst);
+
+    void (*tgt_target_memtask)(void *, int64_t , int64_t , int64_t);
+    *(void **)(&tgt_target_memtask) = KMP_DLSYM("__tgt_target_memtask");
+    KMP_ASSERT(tgt_target_memtask);
+    tgt_target_memtask(mem_task_args->Dst, mem_task_args->Length,
+    mem_task_args->DstDevice, mem_task_args->SrcDevice);
+
+    kmp_info_t *thread = __kmp_threads[gtid];
+#if USE_FAST_MEMORY
+    __kmp_fast_free(thread, mem_task_args);
+#else
+    __kmp_thread_free(thread, mem_task_args);
+#endif
+    };
+
+ kmp_info_t *thread = __kmp_threads[gtid];
+
+#if USE_FAST_MEMORY
+ auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
+ __kmp_fast_allocate(thread, sizeof(kmp_memory_task_args_t)));
+#else
+ auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
+ __kmp_thread_malloc(thread, sizeof(kmp_memory_task_args_t)));
+#endif
+
+ mem_task_args->Dst = dep_addr;
+ mem_task_args->Src = dep_addr;
+ mem_task_args->DstDevice = target_device;
+ mem_task_args->SrcDevice = source_device;
+ mem_task_args->Length = size_addr;
+ mem_task_args->DstOffset = 0;
+ mem_task_args->SrcOffset = 0;
+  
+ // Alloc the memory task
+ kmp_task_t *memory_task = __kmpc_omp_target_task_alloc(
+  nullptr, gtid, Flags, sizeof(kmp_task_t), 0, reinterpret_cast<kmp_routine_entry_t>(Fn),
+  -1, nullptr, 0, nullptr, nullptr, nullptr, nullptr 
+  );
+ if (!memory_task) {
+   return nullptr;
+ }
+ kmp_taskdata_t *memory_taskdata = KMP_TASK_TO_TASKDATA(memory_task);
+ memory_taskdata->is_taskgraph = is_taskgraph;
+
+ // Setup the arguments for the memory task
+ memory_task->shareds = static_cast<void *>(mem_task_args);
+
+ // Create a new depend object for the memory task
+ kmp_depend_info_t mem_task_dep[1] = {
+  {dep->base_addr, dep->len, {KMP_DEP_INOUT}}};
+          // Launch the helper task
+  __kmpc_omp_task_with_deps(nullptr, gtid, memory_task, 1,
+                                    mem_task_dep, 0, nullptr);
+
+  kmp_depnode_list_t node_succ = memory_taskdata->td_depnode->successors;
+  kmp_depnode_list_t new_node;
+  new_node.node = KMP_TASK_TO_TASKDATA(target)->td_depnode;
+  new_node.next = node_succ;
+  memory_taskdata->td_depnode->successors = new_node;
+  KMP_TASK_TO_TASKDATA(target)->td_depnode->npredecessors++;
+  return memory_task;
+}
+
+
+/*vector<kmp_task_and_pred>
 __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
                                    kmp_task_t *task, kmp_dephash_t **hash,
                                    bool dep_barrier, kmp_int32 ndeps,
                                    kmp_depend_info_t *dep_list,
                                    kmp_int32 ndeps_noalias,
-                                   kmp_depend_info_t *noalias_dep_list) {
+                                   kmp_depend_info_t *noalias_dep_list
+				   bool is_taskgraph) {
+  vector<kmp_task_and_pred> ret;
   int i, n_mtxs = 0;
   // Filter deps in dep_list
   // TODO: Different algorithm for large dep_list ( > 10 ? )
@@ -741,12 +817,12 @@ __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
       kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
       kmp_taskdata_t *prev_taskdata = KMP_TASK_TO_TASKDATA(last_out->dn.task);
 
-      kmp_int64 target_device = taskdata->td_target_data.device_id;
-      kmp_int64 source_device = prev_taskdata->td_target_data.device_id;
+      kmp_int64 target_device = __kmpc_get_task_device(taskdata->td_task_id);
+      kmp_int64 source_device = __kmpc_get_task_device(prev_taskdata->td_task_id);
 
-      void **args = taskdata->td_target_data.args;
-      kmp_int64 *arg_sizes = taskdata->td_target_data.arg_sizes;
-      kmp_int32 num_args = taskdata->td_target_data.num_args;
+      void **args = taskdata->td_target_info->args;
+      kmp_int64 *arg_sizes = taskdata->td_target_info->arg_sizes;
+      kmp_int32 num_args = taskdata->td_target_info->num_args;
       auto dep_addr = reinterpret_cast<void *>(dep->base_addr);
 
       for(int j = 0; j < num_args; j++) {
@@ -805,8 +881,11 @@ __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
             -1, nullptr, 0, nullptr, nullptr, nullptr, nullptr 
           );
           if (!memory_task) {
-            return -1;
+            return nullptr;
           }
+
+          kmp_taskdata_t *memory_taskdata = KMP_TASK_TO_TASKDATA(memory_task);
+	  memory_taskdata->is_taskgraph = is_taskgraph;
 
           // Setup the arguments for the memory task
           memory_task->shareds = static_cast<void *>(mem_task_args);
@@ -814,6 +893,11 @@ __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
           // Create a new depend object for the memory task
           kmp_depend_info_t mem_task_dep[1] = {
             {dep->base_addr, dep->len, {KMP_DEP_INOUT}}};
+
+	  kmp_task_and_pred temp;
+	  temp.pred = KMP_TASKDATA_TO_TASK(prev_taskdata);
+          temp.task = memory_task;
+	  ret.push(temp);
 
           // Launch the helper task
           __kmpc_omp_task_with_deps(nullptr, gtid, memory_task, 1,
@@ -825,9 +909,9 @@ __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
     }
   }
 
-  return 0;
+  return ret;
 }
-
+*/
 
 /*!
 @ingroup TASKING
@@ -1028,11 +1112,11 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
     new_taskdata->td_depnode = node;
 
     // Insert memory tasks when it makes sense
-    __kmp_insert_memory_tasks_with_deps(
+    /*__kmp_insert_memory_tasks_with_deps(
       gtid, node, new_task, &current_task->td_dephash,
       NO_DEP_BARRIER, ndeps, dep_list, ndeps_noalias,
       noalias_dep_list);
-
+*/
     if (__kmp_check_deps(gtid, node, new_task, &current_task->td_dephash,
                          NO_DEP_BARRIER, ndeps, dep_list, ndeps_noalias,
                          noalias_dep_list)) {

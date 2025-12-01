@@ -84,7 +84,7 @@ protected:
   int graph_counter;
 
   ScheduleMap schedule_map;
-  std::vector<*kmp_task_t> memory_task_vec;
+  std::vector<kmp_task_and_pred> memory_task_vec;
 
 
   int32_t schedulingThread = -1;
