@@ -314,7 +314,7 @@ void BaseScheduler::addMemoryTasks(){
 
   for (auto &map_entry : schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
-    auto &task = task_schedule.task;
+    auto &task = task_schedule.task.task;
     kmp_int32 task_rank = task_schedule.rank;
     if (isTargetDataTask(task))
       continue;
@@ -322,17 +322,16 @@ void BaseScheduler::addMemoryTasks(){
   //  memory_task_vec.insert(memory_task_vec.end(),new_memory_task.begin(),new_memory_task.end());
     for (int32_t idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       auto successor = &(tdg->record_map[task->successors[idx_succ]]);
-      if (isTargetDataTask(successor)
+      if (isTargetDataTask(successor))
         continue;
       auto successor_rank = schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
-      if (successor_rank != task_rank)
-	{
-	if(successor.target_data !=nullptr && task.target_data!=nullptr){
-          for (int32_t I = 0; I < task.target_data->num_args; I++) {
-            for (int32_t J = 0; J < successor.target_data->num_args; J++) {
-              if (successor.target_data->args[I] == successor.target_data->args[J]) {
-          	__kmp_task_t* memory_task= __kmpc_create_memory_task(0,task,successor,task_rank, successor_rank,task.target_data->args[I] ,task.target_data->arg_sizes[I],true);
-        	memory_task_vec.push({task, memory_task});
+      if (successor_rank != task_rank) {
+	if(successor->target_data !=nullptr && task->target_data!=nullptr) {
+          for (int32_t I = 0; I < task->target_data->num_args; I++) {
+            for (int32_t J = 0; J < successor->target_data->num_args; J++) {
+              if (successor->target_data->args[I] == successor->target_data->args[J]) {
+          	kmp_task_t* memory_task= __kmp_create_memory_task(0,task,successor,task_rank, successor_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
+        	memory_task_vec.push_back({task, memory_task});
               }
             }
           }
