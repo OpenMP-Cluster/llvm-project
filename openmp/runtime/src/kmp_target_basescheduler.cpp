@@ -311,10 +311,10 @@ kmp_target_dep BaseScheduler::getDep(int32_t task_id, int64_t addr) {
 }
 
 void BaseScheduler::addMemoryTasks(){
-
+  KG_TRACE(10,("[SCHEDULER] Add Memory Tasks (begin)"));
   for (auto &map_entry : schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
-    auto &task = task_schedule.task.task;
+    auto &task = task_schedule.task;
     kmp_int32 task_rank = task_schedule.rank;
     if (isTargetDataTask(task))
       continue;
@@ -330,8 +330,11 @@ void BaseScheduler::addMemoryTasks(){
           for (int32_t I = 0; I < task->target_data->num_args; I++) {
             for (int32_t J = 0; J < successor->target_data->num_args; J++) {
               if (successor->target_data->args[I] == successor->target_data->args[J]) {
-          	kmp_task_t* memory_task= __kmp_create_memory_task(0,task,successor,task_rank, successor_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
-        	memory_task_vec.push_back({task, memory_task});
+          	kmp_task_t* memory_task= __kmp_create_memory_task(0,task->task,successor->task,task_rank, successor_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
+        	kmp_task_and_pred temp;
+		temp.pred = task->task;
+		temp.task = memory_task;
+		memory_task_vec.push_back(temp);
               }
             }
           }
@@ -340,6 +343,7 @@ void BaseScheduler::addMemoryTasks(){
     } 
   }
 
+  KG_TRACE(10,("[SCHEDULER] Add Memory Tasks (exit)"));
 }
 
 

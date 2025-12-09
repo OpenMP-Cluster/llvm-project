@@ -734,7 +734,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   
  // Alloc the memory task
  kmp_task_t *memory_task = __kmpc_omp_target_task_alloc(
-  nullptr, gtid, Flags, sizeof(kmp_task_t), 0, reinterpret_cast<kmp_routine_entry_t>(Fn),
+  nullptr, gtid, 0, sizeof(kmp_task_t), 0, reinterpret_cast<kmp_routine_entry_t>(Fn),
   -1, nullptr, 0, nullptr, nullptr, nullptr, nullptr 
   );
  if (!memory_task) {
@@ -747,18 +747,19 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
  memory_task->shareds = static_cast<void *>(mem_task_args);
 
  // Create a new depend object for the memory task
+ auto dep_addr_ptr = reinterpret_cast<kmp_intptr_t>(dep_addr);
  kmp_depend_info_t mem_task_dep[1] = {
-  {dep->base_addr, dep->len, {KMP_DEP_INOUT}}};
+  {dep_addr_ptr, size_addr, {KMP_DEP_INOUT}}};
           // Launch the helper task
   __kmpc_omp_task_with_deps(nullptr, gtid, memory_task, 1,
                                     mem_task_dep, 0, nullptr);
 
-  kmp_depnode_list_t node_succ = memory_taskdata->td_depnode->successors;
-  kmp_depnode_list_t new_node;
-  new_node.node = KMP_TASK_TO_TASKDATA(target)->td_depnode;
-  new_node.next = node_succ;
-  memory_taskdata->td_depnode->successors = new_node;
-  KMP_TASK_TO_TASKDATA(target)->td_depnode->npredecessors++;
+  kmp_depnode_list_t *node_succ = memory_taskdata->td_depnode->dn.successors;
+  kmp_depnode_list_t *new_node;
+  new_node->node = KMP_TASK_TO_TASKDATA(target)->td_depnode;
+  new_node->next = node_succ;
+  memory_taskdata->td_depnode->dn.successors = new_node;
+  KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;
   return memory_task;
 }
 
@@ -1347,4 +1348,92 @@ void __kmpc_omp_taskwait_deps_51(ident_t *loc_ref, kmp_int32 gtid,
   KA_TRACE(10, ("__kmpc_omp_taskwait_deps(exit): T#%d finished waiting : loc=%p\
                 \n",
                 gtid, loc_ref));
+}
+
+void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
+  
+  kmp_int gtid = __kmp_get_gtid();
+  kmp_info_t *thread = __kmp_threads[gtid];
+  kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
+  kmp_depnode_t *node = taskdata->td_depnode;
+  
+  //Removing the task from the successor list of the predecessor
+  // We could use a list of predecessors as input to deal with tasks with multiple dependencies. However, it's not useful with memory tasks
+  
+  kmp_taskdata_t *taskdata_pred = KMP_TASK_TO_TASKDATA(predecessor);
+  kmp_depnode_t *node_pred = taskdata_pred->td_depnode;
+
+  // Check mutexinoutset dependencies, release locks
+  if (UNLIKELY(node_pred && (node_pred->dn.mtx_num_locks < 0))) {
+    // negative num_locks means all locks were acquired
+    node_pred->dn.mtx_num_locks = -node_pred->dn.mtx_num_locks;
+    for (int i = node_pred->dn.mtx_num_locks - 1; i >= 0; --i) {
+      KMP_DEBUG_ASSERT(node_pred->dn.mtx_locks[i] != NULL);
+      __kmp_release_lock(node_pred->dn.mtx_locks[i], gtid);
+    }
+  }
+  
+  kmp_depnode_list_t* pred_successors = node_pred->dn.successors;
+  kmp_depnode_list_t* pred_successors_next = node_pred->dn.successors->next;
+
+  while ( pred_successors_next->next != nullptr && pred_successors_next->node->dn.task != task) {
+    pred_successors = pred_successors_next;
+    pred_successors_next = pred_successors->next;
+  }
+
+  if (pred_successors_next != nullptr) {
+    //Simply remove the link containing the task
+    pred_successors->next = pred_successors_next->next;
+  } 
+  else {
+    KG_TRACE(10,("Given predecessor is not a predecessor of the task"));
+  }
+
+  //Removing the successors
+  // Check mutexinoutset dependencies, release locks
+  if (UNLIKELY(node && (node->dn.mtx_num_locks < 0))) {
+    // negative num_locks means all locks were acquired
+    node->dn.mtx_num_locks = -node->dn.mtx_num_locks;
+    for (int i = node->dn.mtx_num_locks - 1; i >= 0; --i) {
+      KMP_DEBUG_ASSERT(node->dn.mtx_locks[i] != NULL);
+      __kmp_release_lock(node->dn.mtx_locks[i], gtid);
+    }
+  }
+
+  if (taskdata->td_dephash) {
+     __kmp_dephash_free(thread, taskdata->td_dephash);
+    taskdata->td_dephash = NULL;
+  }
+
+  if (!node)
+    return;
+
+  KMP_ACQUIRE_DEPNODE(gtid, node);
+
+  node->dn.task =
+        NULL; // mark this task as finished, so no new dependencies are generated
+  KMP_RELEASE_DEPNODE(gtid, node);
+
+  kmp_depnode_list_t *next;
+  for (kmp_depnode_list_t *p = node->dn.successors; p; p = next) {
+    kmp_depnode_t *successor = p->node;
+    KMP_ATOMIC_DEC(&successor->dn.npredecessors);
+    //We don't want to launch the successor if npredecessors=0, we let the taskgraph do it
+    next = p->next;
+    __kmp_node_deref(thread, p->node);
+#if USE_FAST_MEMORY
+    __kmp_fast_free(thread, p);
+#else
+    __kmp_thread_free(thread, p);
+#endif
+  }
+  __kmp_node_deref(thread, node);
+
+#if USE_FAST_MEMORY
+  __kmp_fast_free(thread, task);
+  __kmp_fast_free(thread, taskdata);
+#else /* ! USE_FAST_MEMORY */
+  __kmp_thread_free(thread, task);
+  __kmp_thread_free(thread, taskdata);
+#endif
 }
