@@ -693,7 +693,8 @@ typedef struct kmp_memory_task_args {
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph){
   // Lambda function that apply the task
   // TODO: update this function to do real memory transfer
-  auto Fn = +[](int gtid, kmp_task_t *task) {
+  KG_TRACE(10,("__kmp_create_memory_task (begin)"));
+    auto Fn = +[](int gtid, kmp_task_t *task) {
     auto *mem_task_args =
      reinterpret_cast<kmp_memory_task_args_t *>(task->shareds);
     printf("Memory Task: ");
@@ -760,6 +761,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   new_node->next = node_succ;
   memory_taskdata->td_depnode->dn.successors = new_node;
   KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;
+  KG_TRACE(10,("__kmp_create_memory_task (exit)"));
   return memory_task;
 }
 

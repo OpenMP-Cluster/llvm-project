@@ -86,7 +86,6 @@ protected:
   ScheduleMap schedule_map;
   std::vector<kmp_task_and_pred> memory_task_vec;
 
-
   int32_t schedulingThread = -1;
   bool isScheduleDone;
   kmp_tdg_info *tdg;

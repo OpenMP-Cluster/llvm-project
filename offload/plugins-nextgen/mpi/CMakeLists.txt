@@ -137,11 +137,6 @@ set_target_properties(llvm-offload-mpi-proxy-device
                       CXX_STANDARD 20
                       CXX_STANDARD_REQUIRED ON)
 
-set_target_properties(llvm-offload-mpi-proxy-device 
-	             PROPERTIES
-	             INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib/x86_64-unknown-linux-gnu"
-                     BUILD_WITH_INSTALL_RPATH TRUE)
-
 target_compile_definitions(llvm-offload-mpi-proxy-device PRIVATE
                            TARGET_NAME=llvm-offload-mpi-proxy-device
                            DEBUG_PREFIX="MPIProxyDevice")
