@@ -1759,6 +1759,7 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
 
   // Allocate and assign data integration between target regions and tasks.
 #if OMPX_TASKGRAPH
+  kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(retval);
   kmp_target_task_data_t *td_target_info =
       new kmp_target_task_data_t(device_id, outlined_fn_id, num_args, args_base,
                                  args, arg_sizes, arg_types);
@@ -5597,6 +5598,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
                 tdg->tdg_id, tdg->num_roots));
   kmp_node_info_t *this_record_map = tdg->record_map;
   kmp_int32 *this_root_tasks = tdg->root_tasks;
+  std::vector<kmp_task_and_pred> this_memory_tasks = tdg->memory_tasks;
   kmp_int32 this_num_roots = tdg->num_roots;
   kmp_int32 this_num_tasks = KMP_ATOMIC_LD_RLX(&tdg->num_tasks);
 
@@ -5615,7 +5617,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   if (tdg->rec_taskred_data) {
     __kmpc_taskred_init(gtid, tdg->rec_num_taskred, tdg->rec_taskred_data);
   }
-//TODO: add memory task relaunch
+
   for (kmp_int32 j = 0; j < this_num_tasks; j++) {
     kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(this_record_map[j].task);
 
@@ -5639,6 +5641,28 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
     }
     if (this_record_map[j].parent_task->td_flags.tasktype == TASK_EXPLICIT)
       KMP_ATOMIC_INC(&this_record_map[j].parent_task->td_allocated_child_tasks);
+  }
+  
+  for (kmp_task_and_pred tp : this_memory_tasks) {
+    kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(tp.task);
+
+    td->td_parent = parent_task;
+    
+    kmp_taskgroup_t *parent_taskgroup =
+        parent_task->td_taskgroup;
+
+    KMP_ATOMIC_INC(&parent_task->td_incomplete_child_tasks);
+
+    if (parent_taskgroup) {
+      KMP_ATOMIC_INC(&parent_taskgroup->count);
+      // The taskgroup is different so we must update it
+      td->td_taskgroup = parent_taskgroup;
+    } else if (td->td_taskgroup != nullptr) {
+      // If the parent doesnt have a taskgroup, remove it from the task
+      td->td_taskgroup = nullptr;
+    }
+    if (parent_task->td_flags.tasktype == TASK_EXPLICIT)
+      KMP_ATOMIC_INC(&parent_task->td_allocated_child_tasks);
   }
 
   for (kmp_int32 j = 0; j < this_num_roots; ++j) {

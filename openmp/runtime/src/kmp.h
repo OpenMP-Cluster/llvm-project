@@ -2700,6 +2700,27 @@ typedef enum kmp_tdg_status {
   KMP_TDG_READY = 2
 } kmp_tdg_status_t;
 
+///OMPC Scheduler
+enum class TaskState {
+  UNDEFINED = -1,
+  CREATED,
+  DEFERRED, // Only used by HEFTScheduler
+  SCHEDULED,
+  DISPATCHED,
+  EXECUTED,
+  FAILED,
+  SAVED
+};
+
+struct TaskScheduleData {
+  TaskState state;
+  int rank;
+  int thread;
+  int translated_rank;
+  const kmp_node_info *task;
+  std::string source_location;
+};
+
 // Maps a task ID to its associated schedule data
 using ScheduleMap = std::unordered_map<int32_t, TaskScheduleData>;
 
@@ -2728,7 +2749,7 @@ typedef struct kmp_tdg_info {
   kmp_int32 rec_num_taskred;
   bool is_scheduled = false;	
   ScheduleMap schedule_map;
-  std::vector<kmp_task_and_pred> memory_task_vec;
+  std::vector<kmp_task_and_pred> memory_tasks;
 } kmp_tdg_info_t;
 
 extern int __kmp_tdg_dot;
@@ -2831,15 +2852,6 @@ typedef struct kmp_tasking_flags { /* Total struct must be exactly 32 bits */
 
 typedef struct kmp_target_data {
   void *async_handle; // libomptarget async handle for task completion query
-
-  // More target task information to enable memory tasks
-  kmp_int64 device_id;  // Device ID
-  void *outlined_fn_id; // Target region/outlined function address
-  kmp_int32 num_args;   // Target region argument addresses and sizes
-  void **args_base;
-  void **args;
-  kmp_int64 *arg_sizes;
-  kmp_int64 *arg_types; // map types (to,from,...) of the target task args
 } kmp_target_data_t;
 
 struct kmp_taskdata { /* aligned during dynamic allocation       */
@@ -4686,6 +4698,7 @@ extern void __kmp_omp_display_env(int verbose);
 // any libomptarget device oblivious of any task structure. To pass the OpenMP
 // Task Graph to the libomptarget, following data must be added to the Graph
 struct kmp_target_task_data {
+  void *async_handle; // libomptarget async handle for task completion query
   kmp_int64 device_id = -1;           // Device ID
   void *outlined_fn_id = nullptr;     // Target region/outlined function address
   kmp_int32 num_args = 0;             // Target region arguments info

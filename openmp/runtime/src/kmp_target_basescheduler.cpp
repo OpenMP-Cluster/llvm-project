@@ -313,10 +313,10 @@ kmp_target_dep BaseScheduler::getDep(int32_t task_id, int64_t addr) {
 
 void BaseScheduler::addMemoryTasks(){
   KG_TRACE(10,("[SCHEDULER] Add Memory Tasks (begin)\n"));
-  printf("[SCHEDULER] ScheduleMap size: %d\n", tdg->schedule_map.size());
+  printf("[SCHEDULER] ScheduleMap size: %d\n",static_cast<int>(tdg->schedule_map.size()));
   for (auto &map_entry : tdg->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
-    kmp_node_info* task = task_schedule.task;
+    const kmp_node_info* task = task_schedule.task;
     kmp_int32 task_rank = task_schedule.rank;
 
     printf("[SCHEDULER] Trying to add memory task for task %d on device %d\n",map_entry.first,task_schedule.rank);
@@ -344,7 +344,7 @@ void BaseScheduler::addMemoryTasks(){
         	kmp_task_and_pred temp;
 		temp.pred = task->task;
 		temp.task = memory_task;
-		tdg->memory_task_vec.push_back(temp);
+		tdg->memory_tasks.push_back(temp);
               }
             }
           }
@@ -400,10 +400,10 @@ void BaseScheduler::resetTasksRank(){
 }
 
 void BaseScheduler::resetMemoryTasks(){
-  for (auto& [pred,task] : tdg->memory_task_vec){
+  for (auto& [pred,task] : tdg->memory_tasks){
     __kmpc_remove_task(task,pred);
   }
-  tdg->memory_task_vec.clear();
+  tdg->memory_tasks.clear();
 }
 
 void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {

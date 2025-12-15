@@ -42,25 +42,6 @@ enum class NonTaskScheduler {
 
 // OmpCluster Task Graph implementation
 // =============================================================================
-enum class TaskState {
-  UNDEFINED = -1,
-  CREATED,
-  DEFERRED, // Only used by HEFTScheduler
-  SCHEDULED,
-  DISPATCHED,
-  EXECUTED,
-  FAILED,
-  SAVED
-};
-
-struct TaskScheduleData {
-  TaskState state;
-  int rank;
-  int thread;
-  int translated_rank;
-  const kmp_node_info *task;
-  std::string source_location;
-};
 
 class BaseScheduler {
 private:

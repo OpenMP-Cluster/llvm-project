@@ -288,7 +288,7 @@ private:
 class HEFTScheduler final : public BaseScheduler {
 public:
   /// Default constructor.
-  HEFTScheduler() : Ctx(this->schedule_map, this->tdg) {}
+  HEFTScheduler() : Ctx(this->tdg->schedule_map, this->tdg) {}
 
   /// Destructor.
   ~HEFTScheduler() {}
