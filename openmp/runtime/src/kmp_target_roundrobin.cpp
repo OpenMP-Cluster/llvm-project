@@ -15,8 +15,8 @@
 
 void RoundRobinScheduler::preScheduleTask(int32_t task_id, int32_t NumDevices) {
 
-  assert(schedule_map.count(task_id) == 1);
-  auto &schedule_data = schedule_map[task_id];
+  assert(tdg->schedule_map.count(task_id) == 1);
+  auto &schedule_data = tdg->schedule_map[task_id];
   auto &task = schedule_data.task;
 
   schedule_data.state = TaskState::SCHEDULED;

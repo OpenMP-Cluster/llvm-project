@@ -62,9 +62,6 @@ struct TaskScheduleData {
   std::string source_location;
 };
 
-// Maps a task ID to its associated schedule data
-using ScheduleMap = std::unordered_map<int32_t, TaskScheduleData>;
-
 class BaseScheduler {
 private:
   int remaining_target_tasks;
@@ -82,9 +79,6 @@ protected:
   // Info for task-graph dumping.
   std::string graph_dump_dir_path;
   int graph_counter;
-
-  ScheduleMap schedule_map;
-  std::vector<kmp_task_and_pred> memory_task_vec;
 
   int32_t schedulingThread = -1;
   bool isScheduleDone;

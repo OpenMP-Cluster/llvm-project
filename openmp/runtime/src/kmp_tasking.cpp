@@ -1757,17 +1757,6 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   kmp_task_t *retval = __kmpc_omp_task_alloc(
     loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry);
 
-  // Add more information about the target task in the wrapper task data
-  kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(retval);
-  taskdata->td_target_data.device_id = device_id;
-  taskdata->td_target_data.outlined_fn_id = outlined_fn_id;
-  taskdata->td_target_data.num_args = num_args;
-  taskdata->td_target_data.args_base = args_base;
-  taskdata->td_target_data.args = args;
-  taskdata->td_target_data.arg_sizes = arg_sizes;
-  taskdata->td_target_data.arg_types = arg_types;
-
-  //TODO: We do twice the same thing here, merge them
   // Allocate and assign data integration between target regions and tasks.
 #if OMPX_TASKGRAPH
   kmp_target_task_data_t *td_target_info =
@@ -1959,7 +1948,7 @@ __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
       // executed the task routine once. We must query for the handle completion
       // instead of re-executing the routine.
       KMP_ASSERT(tgt_target_nowait_query);
-      tgt_target_nowait_query(&taskdata->td_target_data.async_handle);
+      tgt_target_nowait_query(&taskdata->td_target_info->async_handle);
     } else
 #endif
     if (task->routine != NULL) {

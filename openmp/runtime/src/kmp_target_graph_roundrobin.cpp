@@ -21,7 +21,7 @@ void GraphRoundRobinScheduler::scheduleGraph() {
   int task_counter = 0;
 
   int NumDevices = __kmpc_get_num_devices();
-  for (auto &map_entry : schedule_map) {
+  for (auto &map_entry : tdg->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;
 
@@ -46,7 +46,7 @@ void GraphRoundRobinScheduler::scheduleGraph() {
   
   addMemoryTasks();
 
-  assert(std::none_of(schedule_map.begin(), schedule_map.end(),
+  assert(std::none_of(tdg->schedule_map.begin(), tdg->schedule_map.end(),
                       [](const auto &entry) {
                         return entry.second.state < TaskState::SCHEDULED;
                       }));

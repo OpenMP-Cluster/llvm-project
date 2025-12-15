@@ -640,7 +640,7 @@ void HEFTScheduler::scheduleGraph() {
     PQueue.pop_front();
 
     // Do not reschedule already executed or saved tasks
-    const auto Data = schedule_map[KMP_TASKPTR_TO_TASKID(Task)];
+    const auto Data = tdg->schedule_map[KMP_TASKPTR_TO_TASKID(Task)];
     if (Data.state > TaskState::SCHEDULED && Data.state != TaskState::FAILED)
       continue;
 
@@ -668,7 +668,7 @@ void HEFTScheduler::scheduleGraph() {
     Ctx.scheduleTaskOnBestRank(Task);
   }
   // Schedule deferred tasks
-  for (auto &Entry : schedule_map) {
+  for (auto &Entry : tdg->schedule_map) {
     auto &Data = Entry.second;
     const auto *Task = Data.task;
 
@@ -694,7 +694,7 @@ void HEFTScheduler::scheduleGraph() {
 
     for (int32_t idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
       auto Succ = &(tdg->record_map[Task->successors[idx_succ]]);
-      auto SuccRank = schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
+      auto SuccRank = tdg->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
       // Save successor ranks of each scheduled data task to detect broadcast
       // opportunities
       dataTaskSuccessorRanks[KMP_TASKPTR_TO_TASKID(Task)].insert(SuccRank);
@@ -722,7 +722,7 @@ void HEFTScheduler::scheduleGraph() {
   // Tasks can be DISPATCHED, SCHEDULED, EXECUTED or FAILED (because of
   // reschedule)
 
-  assert(std::all_of(schedule_map.begin(), schedule_map.end(), Predicate) &&
+  assert(std::all_of(tdg->schedule_map.begin(), tdg->schedule_map.end(), Predicate) &&
          "Some tasks were not properly scheduled.");
 
   addMemoryTasks();
@@ -759,9 +759,9 @@ void HEFTScheduler::dumpTaskGraph() {
   // For each task
   for (int32_t tid = 0; tid < tdg->num_tasks; tid++) {
     auto task = &(tdg->record_map[tid]);
-    int32_t trank = schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].rank;
-    std::string tinfo = schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].source_location;
-    int32_t state = static_cast<int32_t>(schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
+    int32_t trank = tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].rank;
+    std::string tinfo = tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].source_location;
+    int32_t state = static_cast<int32_t>(tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
 
     // Print graph node
     dot << "  V" << tid << " [label=<<B>ID " << tid
@@ -785,7 +785,7 @@ void HEFTScheduler::dumpTaskGraph() {
     for (int32_t idx = 0; idx < task->nsuccessors; idx++) {
       int32_t sid = task->successors[idx];
       auto succ = &(tdg->record_map[task->successors[idx]]);
-      int32_t srank = schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,sid)].rank;
+      int32_t srank = tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,sid)].rank;
       const auto *color = detail::getEdgeColor(trank, srank);
       double CommCost = Ctx.CommunicationCost[task][succ];
 

@@ -160,6 +160,7 @@ class kmp_stats_list;
 #include <set>
 #include <chrono>
 #include <vector>
+#include <unordered_map>
 #endif
 
 #ifndef UNLIKELY
@@ -2699,6 +2700,14 @@ typedef enum kmp_tdg_status {
   KMP_TDG_READY = 2
 } kmp_tdg_status_t;
 
+// Maps a task ID to its associated schedule data
+using ScheduleMap = std::unordered_map<int32_t, TaskScheduleData>;
+
+struct kmp_task_and_pred {
+  kmp_task_t * pred;
+  kmp_task_t * task;
+};
+
 /// Structure that contains a TDG
 typedef struct kmp_tdg_info {
   kmp_int32 tdg_id; // Unique idenfifier of the TDG
@@ -2718,6 +2727,8 @@ typedef struct kmp_tdg_info {
                           // __kmpc_taskred_init
   kmp_int32 rec_num_taskred;
   bool is_scheduled = false;	
+  ScheduleMap schedule_map;
+  std::vector<kmp_task_and_pred> memory_task_vec;
 } kmp_tdg_info_t;
 
 extern int __kmp_tdg_dot;
@@ -2879,7 +2890,7 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
   kmp_int32 td_tdg_task_id; // local task id in its TDG
   kmp_target_task_data_t *td_target_info; // Pointer to target nowait data info
 #endif
-  kmp_target_data_t td_target_data; //TODO: remove this
+  kmp_target_data td_target_data;
 }; // struct kmp_taskdata
 
 // Make sure padding above worked
@@ -4868,11 +4879,6 @@ kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
 kmp_int32 __kmpc_curr_tdg_idx();
 
 void __kmpc_remove_task(kmp_task_t*, kmp_task_t*);//Remove tasks and the related dependencies
-
-struct kmp_task_and_pred {
-  kmp_task_t * pred;
-  kmp_task_t * task;
-};
 
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph);
 #endif
