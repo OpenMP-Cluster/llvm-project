@@ -122,7 +122,7 @@ public:
 
 public:
   /// Default constructor.
-  HEFTContext(ScheduleMap &Schedule, kmp_tdg_info *tdg);
+  HEFTContext(kmp_tdg_info *tdg);
 
   /// Destructor.
   ~HEFTContext() = default;
@@ -160,8 +160,8 @@ public:
   /// \param task the task
   inline bool isDeferredTask(const kmp_node_info &Task) const {
     bool failed = isTargetDataTask(Task) &&
-                  Schedule[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::FAILED;
-    return Schedule[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::DEFERRED || failed;
+                  tdg->scheduling_info->schedule_map[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::FAILED;
+    return tdg->scheduling_info->schedule_map[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::DEFERRED || failed;
   }
 
   /// Build a priority queue from the upward rank map.
@@ -253,8 +253,6 @@ private:
   int NumThreads;
   /// List of tasks to be scheduled
   kmp_tdg_info *tdg;
-  /// State of the scheduler
-  ScheduleMap &Schedule;
   /// Earliest start time
   EarliestTimeMap EST;
   /// Earliest finish time
@@ -288,7 +286,7 @@ private:
 class HEFTScheduler final : public BaseScheduler {
 public:
   /// Default constructor.
-  HEFTScheduler() : Ctx(this->tdg->schedule_map, this->tdg) {}
+  HEFTScheduler() : Ctx(this->tdg) {}
 
   /// Destructor.
   ~HEFTScheduler() {}

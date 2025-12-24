@@ -2729,6 +2729,11 @@ struct kmp_task_and_pred {
   kmp_task_t * task;
 };
 
+struct kmp_tdg_scheduling {
+  ScheduleMap schedule_map;
+  std::vector<kmp_task_and_pred> memory_tasks;
+};
+
 /// Structure that contains a TDG
 typedef struct kmp_tdg_info {
   kmp_int32 tdg_id; // Unique idenfifier of the TDG
@@ -2748,8 +2753,7 @@ typedef struct kmp_tdg_info {
                           // __kmpc_taskred_init
   kmp_int32 rec_num_taskred;
   bool is_scheduled = false;	
-  ScheduleMap schedule_map;
-  std::vector<kmp_task_and_pred> memory_tasks;
+  kmp_tdg_scheduling* scheduling_info;
 } kmp_tdg_info_t;
 
 extern int __kmp_tdg_dot;

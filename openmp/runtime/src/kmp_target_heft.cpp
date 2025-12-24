@@ -30,10 +30,9 @@ namespace detail {
 // Implementation of HEFTContext
 // =============================================================================
 
-HEFTContext::HEFTContext(ScheduleMap &Schedule, kmp_tdg_info *tdg)
+HEFTContext::HEFTContext(kmp_tdg_info *tdg)
     : CommMultiplier(1.0), DefaultCompCost(100.0), DefaultCommCost(1.0),
-      NumThreads(1), tdg(tdg),
-      Schedule(Schedule) {
+      NumThreads(1), tdg(tdg) {
 
   if (tdg != nullptr)
     computeUpwardRanks();
@@ -76,12 +75,12 @@ double HEFTContext::computeEST(TaskPtr Task, DeviceId Device) {
     // Ignore deferred tasks for now
     if (isDeferredTask(*Task))
       continue;
-//    if(Schedule.count(KMP_TDG_TASKID_TO_TASKID(tdg, Task->predecessors[idx_pred])) != 1)
+//    if(tdg->scheduling_info->schedule_map.count(KMP_TDG_TASKID_TO_TASKID(tdg, Task->predecessors[idx_pred])) != 1)
 //	printf("Task %d, predecessor %d\n",KMP_TASKPTR_TO_TDG_TASKID(Task),Task->predecessors[idx_pred]);
-    assert(Schedule.count(KMP_TDG_TASKID_TO_TASKID(tdg, Task->predecessors[idx_pred])) == 1 &&
+    assert(tdg->scheduling_info->schedule_map.count(KMP_TDG_TASKID_TO_TASKID(tdg, Task->predecessors[idx_pred])) == 1 &&
            "Predecessor should already be scheduled!");
 
-    DeviceId DevicePred(Schedule[KMP_TDG_TASKID_TO_TASKID(tdg,Task->predecessors[idx_pred])]);
+    DeviceId DevicePred(tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,Task->predecessors[idx_pred])]);
     auto Pred = &(tdg->record_map[Task->predecessors[idx_pred]]);
     auto Candidate =
         AFT[Pred] + computeCommCost(*Pred, DevicePred, *Task, Device);
@@ -106,7 +105,7 @@ double HEFTContext::computeEFT(TaskPtr Task, DeviceId Device) {
 
 double HEFTContext::scheduleTask(TaskPtr Task, DeviceId Device) {
 
-  Schedule[KMP_TASKPTR_TO_TASKID(Task)] = {
+  tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Task)] = {
       .state = TaskState::SCHEDULED,
       .rank = Device.Rank,
       .thread = Device.Thread,
@@ -114,7 +113,7 @@ double HEFTContext::scheduleTask(TaskPtr Task, DeviceId Device) {
       .task = Task,
   };
 
-  assert(Schedule[KMP_TASKPTR_TO_TASKID(Task)].state == TaskState::SCHEDULED);
+  assert(tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Task)].state == TaskState::SCHEDULED);
   AST[Task] = EST[Task][Device];
   AFT[Task] = EFT[Task][Device];
   return AFT[Task];
@@ -138,8 +137,8 @@ void HEFTContext::forceScheduleTask(TaskPtr Task, DeviceId Device) {
 
 void HEFTContext::deferTask(TaskPtr Task) {
   // Do not change state of FAILED tasks during the reschedule
-  if (Schedule[KMP_TASKPTR_TO_TASKID(Task)].state != TaskState::FAILED)
-    Schedule[KMP_TASKPTR_TO_TASKID(Task)].state = TaskState::DEFERRED;
+  if (tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Task)].state != TaskState::FAILED)
+    tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Task)].state = TaskState::DEFERRED;
 }
 
 PriorityQueue HEFTContext::buildQueue() const {
@@ -573,7 +572,7 @@ void HEFTContext::dump(int32_t NumDevices) {
     fprintf(fp,
             "%04d  0x%08lx  %10.2lf  %10.2lf  %10.2lf  %7d  %7d  %7d  %7d  %4d",
             KMP_TASKPTR_TO_TASKID(task_ptr), ofid, UpwardRank[&task], AST[&task], AFT[&task],
-            Schedule[KMP_TASKPTR_TO_TASKID(task_ptr)].rank, isRootTask(task), isExitTask(task),
+            tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(task_ptr)].rank, isRootTask(task), isExitTask(task),
             isTargetDataTask(task), isClassicalTask(task));
     for (const auto &Device : Devices)
       fprintf(fp, "  %10.2lf", EST[&task][Device]);
@@ -598,7 +597,7 @@ void HEFTContext::dump(int32_t NumDevices) {
   fprintf(fp, "Schedule Map\n");
   fprintf(fp, "-------------------------------------------------------\n");
 
-  for (const auto &s : Schedule) {
+  for (const auto &s : tdg->scheduling_info->schedule_map) {
     fprintf(fp, "%04d: %04d %d %d\n", s.first, KMP_TASKPTR_TO_TASKID(s.second.task),
             s.second.rank, s.second.state);
   }
@@ -627,20 +626,19 @@ HEFTScheduler::DumpOptions::DumpOptions() {
 ///
 /// \see https://ieeexplore.ieee.org/document/993206
 void HEFTScheduler::scheduleGraph() {
+  KG_TRACE(10,("[HEFT] Scheduling graph with HEFT algorithm:\n"));
   using detail::DeviceId;
   acquireNewGraphPost();
   auto PQueue = Ctx.buildQueue();
   auto NumDevices = __kmpc_get_num_devices();
   auto Devices = Ctx.buildDeviceList(NumDevices);
 
-  KG_TRACE(10,("[SCHEDULER] Scheduling graph with HEFT algorithm:\n"));
-
   while (not PQueue.empty()) {
     const auto *Task = PQueue.front().first;
     PQueue.pop_front();
 
     // Do not reschedule already executed or saved tasks
-    const auto Data = tdg->schedule_map[KMP_TASKPTR_TO_TASKID(Task)];
+    const auto Data = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Task)];
     if (Data.state > TaskState::SCHEDULED && Data.state != TaskState::FAILED)
       continue;
 
@@ -668,7 +666,7 @@ void HEFTScheduler::scheduleGraph() {
     Ctx.scheduleTaskOnBestRank(Task);
   }
   // Schedule deferred tasks
-  for (auto &Entry : tdg->schedule_map) {
+  for (auto &Entry : tdg->scheduling_info->schedule_map) {
     auto &Data = Entry.second;
     const auto *Task = Data.task;
 
@@ -694,7 +692,7 @@ void HEFTScheduler::scheduleGraph() {
 
     for (int32_t idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
       auto Succ = &(tdg->record_map[Task->successors[idx_succ]]);
-      auto SuccRank = tdg->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
+      auto SuccRank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
       // Save successor ranks of each scheduled data task to detect broadcast
       // opportunities
       dataTaskSuccessorRanks[KMP_TASKPTR_TO_TASKID(Task)].insert(SuccRank);
@@ -722,21 +720,24 @@ void HEFTScheduler::scheduleGraph() {
   // Tasks can be DISPATCHED, SCHEDULED, EXECUTED or FAILED (because of
   // reschedule)
 
-  assert(std::all_of(tdg->schedule_map.begin(), tdg->schedule_map.end(), Predicate) &&
-         "Some tasks were not properly scheduled.");
+  assert(std::all_of(tdg->scheduling_info->schedule_map.begin(), tdg->scheduling_info->schedule_map.end(), Predicate) &&
+         "Some tasks were not properly scheduled.\n");
 
+  KG_TRACE(10,("[HEFT]: HEFT (adding memory tasks)\n"));
   addMemoryTasks();
 
   Ctx.dump(NumDevices);
-  KG_TRACE(10,("[SCHEDULER] End HEFT schedule.\n"));
+  KG_TRACE(10,("[HEFT] End HEFT schedule.\n"));
 }
 
 /// Reset context and recompute upward ranks for the new graph
 void HEFTScheduler::acquireNewGraphPost() {
+  KG_TRACE(10,("[HEFT]: AcquireNewGraphPost (start)\n"));
   Ctx.clear();
   Ctx.setTaskMap(__kmpc_curr_tdg_idx());
   Ctx.extrapolateCompCost(scheduling_iteration_counter, initial_schedule_policy, initial_iteration);
   Ctx.computeUpwardRanks();
+  KG_TRACE(10,("[HEFT]: AcquireNewGraphPost (end)\n"));
 }
 
 void HEFTScheduler::dumpTaskGraph() {
@@ -759,9 +760,9 @@ void HEFTScheduler::dumpTaskGraph() {
   // For each task
   for (int32_t tid = 0; tid < tdg->num_tasks; tid++) {
     auto task = &(tdg->record_map[tid]);
-    int32_t trank = tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].rank;
-    std::string tinfo = tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].source_location;
-    int32_t state = static_cast<int32_t>(tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
+    int32_t trank = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].rank;
+    std::string tinfo = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].source_location;
+    int32_t state = static_cast<int32_t>(tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
 
     // Print graph node
     dot << "  V" << tid << " [label=<<B>ID " << tid
@@ -785,7 +786,7 @@ void HEFTScheduler::dumpTaskGraph() {
     for (int32_t idx = 0; idx < task->nsuccessors; idx++) {
       int32_t sid = task->successors[idx];
       auto succ = &(tdg->record_map[task->successors[idx]]);
-      int32_t srank = tdg->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,sid)].rank;
+      int32_t srank = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,sid)].rank;
       const auto *color = detail::getEdgeColor(trank, srank);
       double CommCost = Ctx.CommunicationCost[task][succ];
 

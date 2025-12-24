@@ -5594,11 +5594,11 @@ void __kmp_print_tdg_dot(kmp_tdg_info_t *tdg, kmp_int32 gtid) {
 // tdg:    ID of the TDG
 void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   KMP_DEBUG_ASSERT(tdg->tdg_status == KMP_TDG_READY);
-  KA_TRACE(10, ("__kmp_exec_tdg(enter): T#%d tdg_id=%d num_roots=%d\n", gtid,
+  KG_TRACE(10, ("__kmp_exec_tdg(enter): T#%d tdg_id=%d num_roots=%d\n", gtid,
                 tdg->tdg_id, tdg->num_roots));
   kmp_node_info_t *this_record_map = tdg->record_map;
   kmp_int32 *this_root_tasks = tdg->root_tasks;
-  std::vector<kmp_task_and_pred> this_memory_tasks = tdg->memory_tasks;
+  std::vector<kmp_task_and_pred> this_memory_tasks = tdg->scheduling_info->memory_tasks;
   kmp_int32 this_num_roots = tdg->num_roots;
   kmp_int32 this_num_tasks = KMP_ATOMIC_LD_RLX(&tdg->num_tasks);
 
@@ -5668,7 +5668,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   for (kmp_int32 j = 0; j < this_num_roots; ++j) {
     __kmp_omp_task(gtid, this_record_map[this_root_tasks[j]].task, true);
   }
-  KA_TRACE(10, ("__kmp_exec_tdg(exit): T#%d tdg_id=%d num_roots=%d\n", gtid,
+  KG_TRACE(10, ("__kmp_exec_tdg(exit): T#%d tdg_id=%d num_roots=%d\n", gtid,
                 tdg->tdg_id, tdg->num_roots));
 }
 
@@ -5691,6 +5691,7 @@ static inline void __kmp_start_record(kmp_int32 gtid,
   tdg->tdg_status = KMP_TDG_RECORDING;
   tdg->rec_num_taskred = 0;
   tdg->rec_taskred_data = nullptr;
+  tdg->scheduling_info = new kmp_tdg_scheduling();
   KMP_ATOMIC_ST_RLX(&tdg->num_tasks, 0);
 
   // Initializing the list of nodes in this TDG
@@ -5731,12 +5732,12 @@ kmp_int32 __kmpc_start_record_task(ident_t *loc_ref, kmp_int32 gtid,
 
   kmp_int32 res;
   kmp_taskgraph_flags_t *flags = (kmp_taskgraph_flags_t *)&input_flags;
-  KA_TRACE(10,
+  KG_TRACE(10,
            ("__kmpc_start_record_task(enter): T#%d loc=%p flags=%d tdg_id=%d\n",
             gtid, loc_ref, input_flags, tdg_id));
 
   if (__kmp_max_tdgs == 0) {
-    KA_TRACE(
+    KG_TRACE(
         10,
         ("__kmpc_start_record_task(abandon): T#%d loc=%p flags=%d tdg_id = %d, "
          "__kmp_max_tdgs = 0\n",
@@ -5756,7 +5757,7 @@ kmp_int32 __kmpc_start_record_task(ident_t *loc_ref, kmp_int32 gtid,
     __kmp_num_tdg++;
     res = 1;
   }
-  KA_TRACE(10, ("__kmpc_start_record_task(exit): T#%d TDG %d starts to %s\n",
+  KG_TRACE(10, ("__kmpc_start_record_task(exit): T#%d TDG %d starts to %s\n",
                 gtid, tdg_id, res ? "record" : "execute"));
   return res;
 }
@@ -5814,7 +5815,7 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
                             kmp_int32 input_flags, kmp_int32 tdg_id) {
   kmp_tdg_info_t *tdg = __kmp_find_tdg(tdg_id);
 
-  KA_TRACE(10, ("__kmpc_end_record_task(enter): T#%d loc=%p finishes recording"
+  KG_TRACE(10, ("__kmpc_end_record_task(enter): T#%d loc=%p finishes recording"
                 " tdg=%d with flags=%d\n",
                 gtid, loc_ref, tdg_id, input_flags));
   if (__kmp_max_tdgs) {
@@ -5826,7 +5827,7 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
     if (__kmp_tdg_is_recording(tdg->tdg_status))
       __kmp_end_record(gtid, tdg);
   }
-  KA_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
+  KG_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
                 " tdg=%d, its status is now READY\n",
                 gtid, loc_ref, tdg_id));
 }
