@@ -313,39 +313,35 @@ kmp_target_dep BaseScheduler::getDep(int32_t task_id, int64_t addr) {
 }
 
 void BaseScheduler::addMemoryTasks(){
-  KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (begin)\n"));
-  KG_TRACE(10,("[SCHEDULER-MT] ScheduleMap size: %d\n",static_cast<int>(tdg->scheduling_info->schedule_map.size())));
+  tdg->scheduling_info->is_launching_memory_tasks = true; //We don't want to record memory tasks
+  kmp_int32 gtid = __kmp_get_gtid();
+  KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
+
   for (auto &map_entry : tdg->scheduling_info->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
     kmp_int32 task_rank = task_schedule.rank;
 
-    KG_TRACE(10,("[SCHEDULER-MT] Trying to add memory task for task %d on device %d\n",map_entry.first,task_schedule.rank));
-    if (isTargetDataTask(task)){
-      KG_TRACE(10,("[SCHEDULER-MT] task %d is a target data task\n",map_entry.first));
-      continue;
-    }
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
-
-      if (isTargetDataTask(successor))
-        continue;
-
       kmp_int32 successor_rank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
-      KG_TRACE(10,("[SCHEDULER-MT] Found successor %d on device %d\n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
-      
-      if (successor_rank != task_rank) {
-	if(successor->target_data !=nullptr && task->target_data!=nullptr) {
-      
-	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {
+
+      if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
+	if(successor->target_data != nullptr && task->target_data != nullptr) {
+	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
             for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
-              if (successor->target_data->args[I] == successor->target_data->args[J]) {
-                KG_TRACE(10,("[SCHEDULER-MT] Adding memory task between task %d and task %d ",KMP_TASKPTR_TO_TASKID(task),KMP_TASKPTR_TO_TASKID(successor)));
-          	kmp_task_t* memory_task= __kmp_create_memory_task(0,task->task,successor->task,task_rank, successor_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
+		if (task->target_data->args[I] == successor->target_data->args[J]) {//TODO: Should we compare args or args_base?
+
+		kmp_int32 in_rank = isTargetDataTask(task) ? 0 : task_rank-1;    
+		kmp_int32 out_rank = isTargetDataTask(successor) ? 0 : successor_rank-1; 
+
+          	kmp_task_t* memory_task= __kmp_create_memory_task(gtid,task->task,successor->task,in_rank, out_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
+
         	kmp_task_and_pred temp;
 		temp.pred = task->task;
 		temp.task = memory_task;
 		tdg->scheduling_info->memory_tasks.push_back(temp);
+
               }
             }
           }
@@ -354,6 +350,7 @@ void BaseScheduler::addMemoryTasks(){
     } 
   }
 
+  tdg->scheduling_info->is_launching_memory_tasks = false; //We don't want to record memory tasks
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
 }
 

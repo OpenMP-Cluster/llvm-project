@@ -674,7 +674,7 @@ static void __kmp_task_start(kmp_int32 gtid, kmp_task_t *task,
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_info_t *thread = __kmp_threads[gtid];
 
-  KA_TRACE(10,
+  KG_TRACE(10,
            ("__kmp_task_start(enter): T#%d starting task %p: current_task=%p\n",
             gtid, taskdata, current_task));
 
@@ -1061,7 +1061,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
 #if KMP_DEBUG
   kmp_int32 children = 0;
 #endif
-  KA_TRACE(10, ("__kmp_task_finish(enter): T#%d finishing task %p and resuming "
+  KG_TRACE(10, ("__kmp_task_finish(enter): T#%d finishing task %p and resuming "
                 "task %p\n",
                 gtid, taskdata, resumed_task));
 
@@ -5802,6 +5802,8 @@ void __kmp_end_record(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
 
   if (__kmp_tdg_dot)
     __kmp_print_tdg_dot(tdg, gtid);
+
+  __kmpc_scheduleGraph(tdg);
 }
 
 // __kmpc_end_record_task: wrapper around __kmp_end_record to mark
@@ -5820,13 +5822,10 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
                 gtid, loc_ref, tdg_id, input_flags));
   if (__kmp_max_tdgs) {
     // TODO: use input_flags->nowait
-    if (__kmp_tdg_is_recording(tdg->tdg_status)) {
-      __kmpc_scheduleGraph(tdg);
-    }
-    __kmpc_end_taskgroup(loc_ref, gtid);
     if (__kmp_tdg_is_recording(tdg->tdg_status))
       __kmp_end_record(gtid, tdg);
-  }
+    }
+    __kmpc_end_taskgroup(loc_ref, gtid);
   KG_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
                 " tdg=%d, its status is now READY\n",
                 gtid, loc_ref, tdg_id));

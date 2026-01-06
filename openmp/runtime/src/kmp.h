@@ -2732,6 +2732,7 @@ struct kmp_task_and_pred {
 struct kmp_tdg_scheduling {
   ScheduleMap schedule_map;
   std::vector<kmp_task_and_pred> memory_tasks;
+  bool is_launching_memory_tasks = false;
 };
 
 /// Structure that contains a TDG
