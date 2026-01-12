@@ -178,21 +178,25 @@ int32_t BaseScheduler::scheduleTask(int32_t task_id) {
     // configured scheduling strategy
     if (non_task_scheduler == NonTaskScheduler::ROUNDROBIN) {
       scheduled_id = (non_nowait_counter++ % active_devices_number);
+      KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, default round robin: rank = %d\n",task_id,scheduled_id));
     } else {
       // Static strategy as default: map to the first device
       scheduled_id = 0;
+      KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, default : rank = %d\n",task_id,scheduled_id));
     }
   } else {
 
     if (tdg->scheduling_info->schedule_map.count(task_id) == 0) {
       //If the task was not scheduled (serialization), map to the first device or user-specified device
       scheduled_id = 0 ;
+      KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, task not scheduled : rank = %d\n",task_id,scheduled_id));
     } else { 
     	// If the target region is inside a task (nowait), use the result of the
     	// graph based scheduling algorithm.
 	
+
 	assert(tdg->scheduling_info->schedule_map.count(task_id) == 1);
-        
+
 	preScheduleTask(task_id, active_devices_number);
     	const TaskScheduleData &task_schedule = tdg->scheduling_info->schedule_map[task_id];
     	
@@ -200,6 +204,7 @@ int32_t BaseScheduler::scheduleTask(int32_t task_id) {
         assert(task_schedule.state == TaskState::SCHEDULED);
         
 	scheduled_id = task_schedule.rank - 1;
+        KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, using scheduler : rank = %d\n",task_id,scheduled_id));
     }
 
   }
@@ -209,12 +214,14 @@ int32_t BaseScheduler::scheduleTask(int32_t task_id) {
 }
 
 kmp_int32 BaseScheduler::get_scheduleTask(kmp_int32 task_id){
+  KG_TRACE(50,("[SCHEDULER] get_scheduleTask: task_id: %d\n",task_id));
   if(task_id == -1 || !tdg->scheduling_info->schedule_map.count(task_id))
     return 0;
   return tdg->scheduling_info->schedule_map[task_id].rank - 1;
 }
 
 void BaseScheduler::pinTask(int32_t task_id, int DeviceId) {
+  KG_TRACE(50,("[SCHEDULER] pinTask: task_id %d; device: %d\n",task_id,DeviceId));
   if (task_id != -1) {
     TaskScheduleData &task_schedule = tdg->scheduling_info->schedule_map[task_id];
     task_schedule.rank = DeviceId + 1;
@@ -223,6 +230,7 @@ void BaseScheduler::pinTask(int32_t task_id, int DeviceId) {
 
 void BaseScheduler::setTaskState(int32_t task_id, TaskState new_state) {
 
+  KG_TRACE(50,("[SCHEDULER] setTaskState: task_id %d;\n",task_id));
   //assert(tdg != nullptr);
   if(tdg->scheduling_info->schedule_map.count(task_id) !=1)
  	KG_TRACE(10,("Task state fail: task %d. Initial task: %d\n",task_id,tdg->initial_task_id));
@@ -253,13 +261,14 @@ void BaseScheduler::setTaskState(int32_t task_id, int device_id,
   // the real device that executed the task. Do not update if the task is FAILED
   // and the new state is EXECUTED, because this is the case where the graph was
   // just re-scheduled and we will ignore this state transition
+  KG_TRACE(50,("[SCHEDULER] setTaskState: task_id %d; device: %d\n",task_id,device_id));
   if (tdg->scheduling_info->schedule_map[task_id].state == TaskState::FAILED &&
       new_state == TaskState::EXECUTED) {
     remaining_target_tasks--;
     return;
   }
 
-  tdg->scheduling_info->schedule_map[task_id].rank = device_id + 1;
+  //tdg->scheduling_info->schedule_map[task_id].rank = device_id + 1;
   setTaskState(task_id, new_state);
 }
 
@@ -276,10 +285,8 @@ void BaseScheduler::setTaskState(int32_t task_id, int device_id,
 // }
 
 TaskScheduleData BaseScheduler::getTask(int task_id) {
+  KG_TRACE(50,("[SCHEDULER] getTask: task_id %d\n",task_id));
   if (task_id != -1) {
-    if (tdg->scheduling_info->schedule_map.count(task_id) == 0) {
-      //acquireNewGraph(); TODO
-    }
     if (tdg->scheduling_info->schedule_map.count(task_id) == 0) {
       return TaskScheduleData{.state = TaskState::UNDEFINED,
                               .rank = -1,
@@ -313,7 +320,7 @@ kmp_target_dep BaseScheduler::getDep(int32_t task_id, int64_t addr) {
 }
 
 void BaseScheduler::addMemoryTasks(){
-  tdg->scheduling_info->is_launching_memory_tasks = true; //We don't want to record memory tasks
+ /* tdg->scheduling_info->is_launching_memory_tasks = true; //We don't want to record memory tasks
   kmp_int32 gtid = __kmp_get_gtid();
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
 
@@ -351,7 +358,7 @@ void BaseScheduler::addMemoryTasks(){
   }
 
   tdg->scheduling_info->is_launching_memory_tasks = false; //We don't want to record memory tasks
-  KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
+  KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));*/
 }
 
 
@@ -391,17 +398,21 @@ void BaseScheduler::resetTasksState(){
 }
 
 void BaseScheduler::resetTasksRank(){
+  KG_TRACE(10,("resetTasksRank start\n"));
   for ( auto& task : tdg->scheduling_info->schedule_map){
     task.second.rank = -1;
     task.second.translated_rank = -1;
   }
+  KG_TRACE(10,("resetTasksRank end\n"));
 }
 
 void BaseScheduler::resetMemoryTasks(){
+  KG_TRACE(10,("resetMemoryTasks start\n"));
   for (auto& [pred,task] : tdg->scheduling_info->memory_tasks){
     __kmpc_remove_task(task,pred);
   }
   tdg->scheduling_info->memory_tasks.clear();
+  KG_TRACE(10,("resetMemoryTasks end\n"));
 }
 
 void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {

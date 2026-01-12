@@ -192,7 +192,7 @@ EXTERN void __tgt_target_data_begin_mapper(ident_t *Loc, int64_t DeviceId,
                           ArgTypes, ArgNames, ArgMappers, targetDataBegin,
                           "Entering OpenMP data region with being_mapper",
                           "begin");
-  MarkExecutedTask(DeviceId);
+  MarkExecutedTask();
 }
 
 EXTERN void __tgt_target_data_begin_nowait_mapper(
@@ -400,12 +400,12 @@ EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   if (KernelArgs->Flags.NoWait) {
     int Rc = targetKernel<TaskAsyncInfoWrapperTy>(
         Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
-    MarkExecutedTask(DeviceId);
+    MarkExecutedTask();
   return Rc;
   }
   int Rc = targetKernel<AsyncInfoTy>(Loc, DeviceId, NumTeams, ThreadLimit,
                                    HostPtr, KernelArgs);
-  MarkExecutedTask(DeviceId);
+  MarkExecutedTask();
   return Rc;
 }
 

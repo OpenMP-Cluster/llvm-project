@@ -21,10 +21,6 @@
 struct RTLInfoTy;
 struct DeviceTy;
 
-
-/// Deallocate the scheduler if it exists.
-void DeinitScheduler();
-
 // Schedule a target region among the many devices of the same type as DeviceID.
 // Currently only used by the MPI plugin.
 int Schedule(ident_t *Loc, int DeviceId);
@@ -35,21 +31,14 @@ int Schedule(ident_t *Loc, int DeviceId);
 void PinTask(ident_t *Loc, int DeviceId);
 
 // Mark the target task as executed and free the allocated device.
-void MarkExecutedTask(int device_id);
-
-// Mark the target task as failed and set ft handlers.
-void MarkFailedTask(int32_t task_id, const DeviceTy &Device);
+void MarkExecutedTask();
 
 /// Marks a pinned task as executed.
 ///
 /// \note since pinned tasks does not allocate devices, no free is needed.
 void MarkExecutedPinnedTask(const DeviceTy &Device);
 
-bool HasOutDep(int32_t task, int64_t addr);
-
 int32_t GetCurrentTargetTaskID();
-
-void reScheduleGraph(RTLInfoTy *RTL);
 
 /// Get the outlined function ID of the current task.
 const void *GetCurrentOutlinedFnID();

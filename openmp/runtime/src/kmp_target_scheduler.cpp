@@ -17,21 +17,20 @@
 #include "kmp_target_graph_roundrobin.h"
 #include "kmp_target_roundrobin.h"
 
-#if ENABLE_LIBOMPTARGET
-static int (*omp_get_num_devices)(void) = nullptr;
-static bool init = 0;
+static int32_t num_devices = -1;
 
-void __kmp_init_omp_get_num_devices(){
-   *(void **)(&omp_get_num_devices) = KMP_DLSYM("omp_get_num_devices");
-}
-#endif
+int32_t __kmpc_get_num_devices(){
+  if (num_devices !=-1)
+    return num_devices;
+  int32_t runtime_device_number = omp_get_num_devices();
+  const char *str = std::getenv("OMPCLUSTER_NUM_DEVICES");
+  int32_t devices_env = (str != nullptr) ? std::stoi(str) : runtime_device_number;
 
-int __kmpc_get_num_devices(){
-  if (!init){
-    init = 1;
-    __kmp_init_omp_get_num_devices();
+  if(runtime_device_number != devices_env){
+    KG_TRACE(10,("__kmpc_get_num_devices: forcing the number of devicesi\n"));
+    return num_devices= devices_env;
   }
-  return omp_get_num_devices();
+  return num_devices = runtime_device_number;
 }
 
 // Strings allowed to be passed in the OMPCLUSTER_SCHEDULER environment
@@ -112,7 +111,7 @@ KG_TRACE(10,("__kmpc_scheduleGraph Start\n"));
 
   kmp_int gtid = __kmp_get_gtid();
 
-  KG_TRACE(10,("__kmpc_scheduleGraph : thread %d scheduling\n", gtid));
+  KG_TRACE(30,("__kmpc_scheduleGraph : thread %d scheduling\n", gtid));
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->acquireAndScheduleGraph(tdg);
   KG_TRACE(10,("__kmpc_scheduleGraph Exit: End Schedule\n"));
@@ -127,9 +126,9 @@ void __kmpc_waitScheduleGraph(){
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   }
-  //KG_TRACE(10,("__kmpc_waitScheduleGraph Start\n"));
+  KG_TRACE(90,("__kmpc_waitScheduleGraph Start\n"));
   scheduler->waitScheduleGraph();
-  //KG_TRACE(10,("__kmpc_waitScheduleGraph Exit End Wait\n"));
+  KG_TRACE(90,("__kmpc_waitScheduleGraph Exit End Wait\n"));
 }
 
 int32_t __kmpc_scheduleTask(int32_t task_id) {
@@ -217,11 +216,11 @@ void __kmpc_scheduler_update_weights(){
 
 void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg){
   for ( kmp_int32 tdg_task_id = 0; tdg_task_id < tdg->num_tasks ; tdg_task_id++){
-     printf("[Inter HEFT]: Task %d:\n",tdg_task_id);
+     KG_TRACE(20,("[Inter HEFT]: Task %d:\n",tdg_task_id));
     for (kmp_int32 device = 0 ; device < __kmpc_get_num_devices(); device++) {
-     printf("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number);
+     KG_TRACE(20,("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number));
     } 
-     printf("\n");
+     KG_TRACE(20,("\n"));
   }
 }
 

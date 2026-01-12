@@ -4876,7 +4876,7 @@ KMP_EXPORT void __kmpc_dumpTaskGraph();
 KMP_EXPORT const void *__kmpc_GetCurrentOutlinedFnID();
 //KMP_EXPORT std::set<int> __kmpc_getDataTaskSuccessors(int32_t task_id);
 int __kmpc_get_num_devices();
-
+int omp_get_num_devices(void) __attribute__((weak));
 
 //Main scheduling function: Retrieve and schedule the taskgraph if needed
 void __kmpc_scheduleGraph(kmp_tdg_info_t* tdg);

@@ -223,7 +223,7 @@ static kmp_depnode_list_t *__kmp_add_node(kmp_info_t *thread,
 static inline void __kmp_track_dependence(kmp_int32 gtid, kmp_depnode_t *source,
                                           kmp_depnode_t *sink,
                                           kmp_task_t *sink_task) {
-  KG_TRACE(10,("__kmp_track_dependence (begin)\n"));
+  KG_TRACE(30,("__kmp_track_dependence (begin)\n"));
 #if OMPX_TASKGRAPH
   kmp_taskdata_t *task_source = KMP_TASK_TO_TASKDATA(source->dn.task);
   kmp_taskdata_t *task_sink = KMP_TASK_TO_TASKDATA(sink_task);
@@ -303,7 +303,7 @@ static inline void __kmp_track_dependence(kmp_int32 gtid, kmp_depnode_t *source,
         &(task_source->ompt_task_info.task_data), sink_data);
   }
 #endif /* OMPT_SUPPORT && OMPT_OPTIONAL */
-  KG_TRACE(10,("__kmp_track_dependence (end)\n"));
+  KG_TRACE(30,("__kmp_track_dependence (end)\n"));
 }
 
 kmp_base_depnode_t *__kmpc_task_get_depnode(kmp_task_t *task) {
@@ -320,7 +320,7 @@ static inline kmp_int32
 __kmp_depnode_link_successor(kmp_int32 gtid, kmp_info_t *thread,
                              kmp_task_t *task, kmp_depnode_t *node,
                              kmp_depnode_list_t *plist) {
-  KG_TRACE(10,("__kmp_depnode_link_successor_list (begin) \n"));
+  KG_TRACE(3330,("__kmp_depnode_link_successor_list (begin) \n"));
   if (!plist)
     return 0;
   kmp_int32 npredecessors = 0;
@@ -356,7 +356,7 @@ __kmp_depnode_link_successor(kmp_int32 gtid, kmp_info_t *thread,
       KMP_RELEASE_DEPNODE(gtid, dep);
     }
   }
-  KG_TRACE(10,("__kmp_depnode_link_successor_list (end) \n"));
+  KG_TRACE(30,("__kmp_depnode_link_successor_list (end) \n"));
   return npredecessors;
 }
 
@@ -366,7 +366,7 @@ static inline kmp_int32 __kmp_depnode_link_successor(kmp_int32 gtid,
                                                      kmp_task_t *task,
                                                      kmp_depnode_t *source,
                                                      kmp_depnode_t *sink) {
-  KG_TRACE(10,("__kmp_depnode_link_successor (begin) \n"));
+  KG_TRACE(30,("__kmp_depnode_link_successor (begin) \n"));
   if (!sink)
     return 0;
   kmp_int32 npredecessors = 0;
@@ -412,7 +412,7 @@ static inline kmp_int32 __kmp_depnode_link_successor(kmp_int32 gtid,
     }
     KMP_RELEASE_DEPNODE(gtid, sink);
   }
-  KG_TRACE(10,("__kmp_depnode_link_successor (end) \n"));
+  KG_TRACE(30,("__kmp_depnode_link_successor (end) \n"));
   return npredecessors;
 }
 
@@ -722,7 +722,7 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph){
   // Lambda function that apply the task
   // TODO: update this function to do real memory transfer
-  KG_TRACE(10,("[SCHEDULER-MT]  __kmp_create_memory_task (begin)\n "));
+  KG_TRACE(20,("[SCHEDULER-MT]  __kmp_create_memory_task (begin)\n "));
     /*  auto Fn = +[](int gtid, kmp_task_t *task) {
     auto *mem_task_args =
      reinterpret_cast<kmp_memory_task_args_t *>(task->shareds);
@@ -799,7 +799,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   new_node->next = node_succ;
   memory_taskdata->td_depnode->dn.successors = new_node;
   KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;
-  KG_TRACE(10,("__kmp_create_memory_task (exit)\n"));
+  KG_TRACE(30,("__kmp_create_memory_task (exit)\n"));
   return memory_task;
 }
 
@@ -1395,7 +1395,7 @@ void __kmpc_omp_taskwait_deps_51(ident_t *loc_ref, kmp_int32 gtid,
 
 void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
     
-  KG_TRACE(10,("__kmpc_remove_task (begin)\n"));
+  KG_TRACE(30,("__kmpc_remove_task (begin)\n"));
   
   kmp_int gtid = __kmp_get_gtid();
   kmp_info_t *thread = __kmp_threads[gtid];
@@ -1431,7 +1431,7 @@ void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
     pred_successors->next = pred_successors_next->next;
   } 
   else {
-    KG_TRACE(10,("__kmpc_remove_task : Given predecessor is not a predecessor of the task\n"));
+    KG_TRACE(30,("__kmpc_remove_task : Given predecessor is not a predecessor of the task\n"));
   }
 
   //Removing the successors
@@ -1481,5 +1481,5 @@ void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
   __kmp_thread_free(thread, task);
   __kmp_thread_free(thread, taskdata);
 #endif
-  KG_TRACE(10,("__kmpc_remove_task (exit)\n"));
+  KG_TRACE(30,("__kmpc_remove_task (exit)\n"));
 }
