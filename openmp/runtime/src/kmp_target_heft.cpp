@@ -726,10 +726,6 @@ void HEFTScheduler::scheduleGraph() {
 
   KG_TRACE(10,("[HEFT]: HEFT (adding memory tasks)\n"));
   addMemoryTasks();
-  
-  for( auto [id,task]: tdg->scheduling_info->schedule_map) {
-    KG_TRACE(10, ("[HEFT:] Task %d scheduled on rank %d\n", id, task.rank));
-  }
 
   Ctx.dump(NumDevices);
   KG_TRACE(10,("[HEFT] End HEFT schedule.\n"));

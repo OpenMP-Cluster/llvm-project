@@ -4703,7 +4703,7 @@ extern void __kmp_omp_display_env(int verbose);
 // any libomptarget device oblivious of any task structure. To pass the OpenMP
 // Task Graph to the libomptarget, following data must be added to the Graph
 struct kmp_target_task_data {
-  void *async_handle; // libomptarget async handle for task completion query
+  //void *async_handle; // libomptarget async handle for task completion query
   kmp_int64 device_id = -1;           // Device ID
   void *outlined_fn_id = nullptr;     // Target region/outlined function address
   kmp_int32 num_args = 0;             // Target region arguments info

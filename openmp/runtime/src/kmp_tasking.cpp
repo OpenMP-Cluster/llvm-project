@@ -675,8 +675,15 @@ static void __kmp_task_start(kmp_int32 gtid, kmp_task_t *task,
   kmp_info_t *thread = __kmp_threads[gtid];
 
   KG_TRACE(10,
-           ("__kmp_task_start(enter): T#%d starting task %p: current_task=%p\n",
-            gtid, taskdata, current_task));
+           ("__kmp_task_start(enter): T#%d starting task %d: current_task=%p\n",
+            gtid, taskdata->td_task_id, current_task));
+  for ( auto [pred, memotask] : taskdata->tdg->scheduling_info->memory_tasks) {
+  	if ( memotask == task) {
+	  KG_TRACE(10,
+           ("__kmp_task_start(enter): T#%d starting task %d: isMemoryTask (pred: %d)\n",
+            gtid, taskdata->td_task_id, KMP_TASK_TO_TASKDATA(pred)->td_task_id));
+	}
+  }
 
   KMP_DEBUG_ASSERT(taskdata->td_flags.tasktype == TASK_EXPLICIT);
 
@@ -1949,7 +1956,7 @@ __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
       // executed the task routine once. We must query for the handle completion
       // instead of re-executing the routine.
       KMP_ASSERT(tgt_target_nowait_query);
-      tgt_target_nowait_query(&taskdata->td_target_info->async_handle);
+      tgt_target_nowait_query(&taskdata->td_target_data.async_handle);
     } else
 #endif
     if (task->routine != NULL) {
@@ -5605,10 +5612,6 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *parent_task = thread->th.th_current_task;
 
-  for( auto [id,task]: tdg->scheduling_info->schedule_map) {
-    KG_TRACE(10, ("[exec_tdg begin:] Task %d scheduled on rank %d\n", id, task.rank));
-  }
-
   __kmpc_reset_schedule_map(tdg);    
   if (__kmpc_is_rescheduling()){
     __kmpc_scheduler_update_weights();
@@ -5835,9 +5838,7 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
       __kmp_end_record(gtid, tdg);
     }
     __kmpc_end_taskgroup(loc_ref, gtid);
-  for( auto [id,task]: tdg->scheduling_info->schedule_map) {
-    KG_TRACE(10, ("[end_tdg] Task %d scheduled on rank %d\n", id, task.rank));
-  }
+
   KG_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
                 " tdg=%d, its status is now READY\n",
                 gtid, loc_ref, tdg_id));

@@ -715,6 +715,10 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
 #else
   __kmp_thread_free(thread, mem_task_args);
 #endif
+
+  kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(task);
+
+  __kmp_fulfill_event(&(td->td_allow_completion_event));
 }
 
 
@@ -772,6 +776,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
  if (!memory_task) {
    return nullptr;
  }
+ __kmpc_task_allow_completion_event(nullptr, gtid, memory_task);
  kmp_taskdata_t *memory_taskdata = KMP_TASK_TO_TASKDATA(memory_task);
  memory_taskdata->is_taskgraph = is_taskgraph;
  memory_taskdata->tdg = KMP_TASK_TO_TASKDATA(source)->tdg;
