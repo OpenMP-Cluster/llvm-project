@@ -1130,10 +1130,8 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
 
 #if OMPX_TASKGRAPH
   // Add task to libomptarget task graph
-  if(new_taskdata->tdg == nullptr || new_taskdata->tdg->scheduling_info->is_launching_memory_tasks == false) { //We don't want to record memory tasks
-    __kmpc_add_target_task_with_deps(new_taskdata, ndeps, dep_list, ndeps_noalias,
+  __kmpc_add_target_task_with_deps(new_taskdata, ndeps, dep_list, ndeps_noalias,
                                    noalias_dep_list);
-  }
 #endif
 
   bool serial = current_task->td_flags.team_serial ||

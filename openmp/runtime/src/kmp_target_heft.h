@@ -310,8 +310,6 @@ public:
   /// Dump the task graph with HEFT-specific information.
   void dumpTaskGraph() override;
 
-  std::set<int> getDataTaskSuccessors(int32_t task_id) override;
-
 private:
   detail::HEFTContext Ctx;
 

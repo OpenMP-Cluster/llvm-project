@@ -1068,9 +1068,9 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
 #if KMP_DEBUG
   kmp_int32 children = 0;
 #endif
-  KG_TRACE(10, ("__kmp_task_finish(enter): T#%d finishing task %p and resuming "
+  KG_TRACE(10, ("__kmp_task_finish(enter): T#%d finishing task %p (id: %d)and resuming "
                 "task %p\n",
-                gtid, taskdata, resumed_task));
+                gtid, taskdata, taskdata->td_task_id, resumed_task));
 
   KMP_DEBUG_ASSERT(taskdata->td_flags.tasktype == TASK_EXPLICIT);
 

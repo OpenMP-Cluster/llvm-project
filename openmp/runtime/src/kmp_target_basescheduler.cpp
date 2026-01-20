@@ -79,16 +79,6 @@ BaseScheduler::~BaseScheduler() {
   }
 }
 
-void BaseScheduler::waitOmpGraphCreation() {
-  // Wait for the task builder thread (the thread executing the master/single
-  // region) to finish the task graph and enter a synchronization point (starts
-  // executing tasks itself).
-  while (!__kmpc_is_graph_builder_tasking() && !isScheduleDone &&  __kmpc_has_active_tasks()) {
-    // TODO: better waiting strategy. Maybe used smart sleep to free the core?
-    std::this_thread::sleep_for(std::chrono::microseconds(10));
-  }
-}
-
 void BaseScheduler::acquireNewGraph(kmp_tdg_info_t* new_tdg) {
 
   KG_TRACE(10,("acquireNewGraph Start\n"));
@@ -268,13 +258,10 @@ void BaseScheduler::setTaskState(int32_t task_id, int device_id,
     return;
   }
 
-  //tdg->scheduling_info->schedule_map[task_id].rank = device_id + 1;
   setTaskState(task_id, new_state);
 }
 
 // void BaseScheduler::setTaskSourceLocation(int32_t task_id, ident_t *loc) {
-//   assert(task_map != nullptr);
-//
 //   TaskScheduleData &task_schedule = schedule_map[task_id];
 //
 //   SourceInfo tinfo(loc);

@@ -827,11 +827,6 @@ void HEFTScheduler::dumpTaskGraph() {
     dot << "}\n";
 }
 
-// fixme Return the list of successor ranks of a given data task
-std::set<int> HEFTScheduler::getDataTaskSuccessors(int32_t task_id) {
-  return dataTaskSuccessorRanks[task_id];
-}
-
 void HEFTScheduler::resetWeight(){
   Ctx.clearCompCost();
 }

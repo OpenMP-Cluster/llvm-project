@@ -101,8 +101,6 @@ public:
   void addMemoryTasks();
 
 private:
-  /// Wait for OpenMP to create its graph
-  void waitOmpGraphCreation();
   /// Replace the current task graph with the newest one from OpenMP runtime.
   void acquireNewGraph(kmp_tdg_info_t* tdg);
 
@@ -111,7 +109,6 @@ public:
   virtual void dumpTaskGraph();
   /// Return the list of successor ranks of a given data task if the HEFT
   /// scheduler is enabled
-  virtual std::set<int> getDataTaskSuccessors(int32_t task_id) { return {}; }
 
   virtual void resetWeight() = 0;
 

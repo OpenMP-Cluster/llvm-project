@@ -4763,14 +4763,6 @@ struct kmp_target_task {
   kmp_int32 num_predecessors; // Number of direct predecessors
 };
 
-struct kmp_target_task_map {
-  kmp_target_task_t *tasks; // Current tasks array
-  kmp_int32 num_tasks; // Number of current tasks
-
-  kmp_target_task_t **roots; // Pointer to root tasks in the tasks array
-  kmp_int32 num_roots; // Number of root tasks
-};
-
 // Functions used by the OpenMP Runtime to manage target tasks.
 // =============================================================================
 
@@ -4794,51 +4786,6 @@ void __kmpc_add_target_task_with_deps(
 // Param:
 // - task_id: id of the task to be remove
 void __kmpc_remove_root_target_task(kmp_int32 task_id);
-
-// Functions used by libomptarget to manage its local target task graph copy.
-// =============================================================================
-
-// Allocates and generates an updated task map with new tasks allocated at the
-// current parallel region by the master thread. This can be called at any time,
-// but it is only guaranteed to return a complete task graph if the master
-// thread has already processed all the task regions. For that, please refer to
-// the "__kmpc_is_graph_builder_tasking" function.
-//
-// Returns: a valid pointer to the created task hash map if there are any new
-//          tasks allocated by the master thread. Returns nullptr otherwise. If
-//          the caller thread is not a valid OpenMP thread or it is not inside a
-//          task team, it also will return false.
-kmp_target_task_map_t *__kmpc_target_task_map_create();
-
-// Frees a target task map structure
-//
-// Param:
-// - task_map: a valid pointer to a task hash map
-//
-// Obs: this function will failed if called outside of a OpenMP thread due to
-// local memory allocations.
-void __kmpc_target_task_map_free(kmp_target_task_map_t *task_map);
-
-// Accesses the task hash map and returns a task that matches the passed id.
-//
-// Param:
-// - task_map: a valid pointer to a task hash map
-// - task_id: the id of the desired task
-//
-// Returns: a valid pointer to the requested task if "task_id" matches any task
-//          in the hash map. It returns nullptr if either "task_map" is a
-//          nullptr or "task_id" is not found in the map.
-kmp_target_task_t *
-__kmpc_target_task_map_get(kmp_target_task_map_t *task_map, kmp_int32 task_id);
-
-// Checks if the thread that is currently building the task graph is tasking (at
-// a synchronization point) and thus has finished building the graph.
-//
-// Returns: true if the builder thread of the current task team is tasking.
-//          False otherwise. If the caller thread is not a valid OpenMP thread
-//          or it is not inside a task team, it will return false as well.
-bool __kmpc_is_graph_builder_tasking();
-kmp_int __kmp_get_builder_gtid();
 
 // Gets the task id of the current (EXPLICIT/User created) task being executed
 // by the calling OpenMP thread.
@@ -4874,7 +4821,7 @@ KMP_EXPORT void __kmpc_setTaskStateWithDevice(int32_t task_id, int device_id,
 KMP_EXPORT kmp_target_dep __kmpc_getDep(int32_t task_id, int64_t addr);
 KMP_EXPORT void __kmpc_dumpTaskGraph();
 KMP_EXPORT const void *__kmpc_GetCurrentOutlinedFnID();
-//KMP_EXPORT std::set<int> __kmpc_getDataTaskSuccessors(int32_t task_id);
+
 int __kmpc_get_num_devices();
 int omp_get_num_devices(void) __attribute__((weak));
 

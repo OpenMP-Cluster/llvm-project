@@ -41,12 +41,6 @@ struct TargetTaskContext {
   TaskPtrMap root_tasks;
   // Current dependency history referenced by the active tasks
   std::unordered_map<kmp_intptr_t, addr_ref_t> dep_history;
-  // Hash map of the tasks copied to each task map created the user. Used during
-  // the task creation and remove process.
-  std::unordered_map<kmp_target_task_map_t *, TaskPtrMap> user_hash_map;
-
-  // Global thread id of the current thread that is creating the graph.
-  int graph_builder_gtid;
 
   // Mutex used to protect this structure.
   std::mutex ctx_mutex;
@@ -61,7 +55,6 @@ __attribute__((constructor)) static void init_target_task_context() {
 
   if (old_count == 0) {
     gcontext = new TargetTaskContext;
-    gcontext->graph_builder_gtid = -1;
   } else {
     // The other threads must wait for `gcontext` to be constructed. Since
     // this only happens when more than one thread enters this function
@@ -285,15 +278,6 @@ void __kmpc_add_target_task_with_deps(
   assertm(thread != nullptr,
           "Function should be called inside an OpenMP thread");
 
-  // Set the new graph creator
-  int gtid = __kmp_gtid_from_thread(thread);
-  if (gcontext->graph_builder_gtid != gtid) {
-    gcontext->graph_builder_gtid = gtid;
-    KA_TRACE(20, ("__kmpc_add_target_task_with_deps: T#%d is the new "
-                  "target-task graph builder",
-                  gtid));
-  }
-
   // Create target task structure
   const kmp_int32 task_id = taskdata->td_task_id;
   kmp_target_task_t &new_task = gcontext->active_tasks[taskdata->td_task_id];
@@ -386,7 +370,7 @@ void __kmpc_add_target_task_with_deps(
 void __kmpc_remove_root_target_task(kmp_int32 task_id) {
   // Only one OpenMP thread can remove a task each time
   std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-
+  KG_TRACE(10,("__kmpc_remove_root_target_task (start) : task id: %d\n",task_id));
   // This function can be called for tasks without dependencies. Immediately
   // return in these cases.
   if (gcontext->active_tasks.count(task_id) == 0) {
@@ -440,136 +424,7 @@ void __kmpc_remove_root_target_task(kmp_int32 task_id) {
   gcontext->active_tasks.erase(task_id);
 }
 
-// Task graph access functions
-// =============================================================================
-kmp_target_task_map_t *__kmpc_target_task_map_create() {
-  // Init global target task context
-  init_target_task_context();
 
-  // Guarantee that no task is being removed when someone creates a task map.
-  // This also synchronizes the access to the 'user_hash_map'
-  std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-
-  if (gcontext->active_tasks.empty()) {
-    return nullptr;
-  }
-
-  // Allocate user task map data
-  auto *user_map = thread_malloc<kmp_target_task_map_t>(nullptr, 1);
-  gcontext->user_hash_map.emplace(user_map, TaskPtrMap());
-
-  user_map->num_tasks = gcontext->active_tasks.size();
-  user_map->tasks =
-      thread_malloc<kmp_target_task_t>(nullptr, user_map->num_tasks);
-
-  user_map->num_roots = gcontext->root_tasks.size();
-  user_map->roots =
-      thread_malloc<kmp_target_task_t *>(nullptr, user_map->num_roots);
-
-  // Copy tasks and set roots
-  int task_idx = 0;
-  int root_idx = 0;
-  for (const auto &task_hash_item : gcontext->active_tasks) {
-    const kmp_target_task_t &source_task = task_hash_item.second;
-    assert(task_idx < user_map->num_tasks);
-
-    // Copy task data
-    kmp_target_task_t &user_task = user_map->tasks[task_idx++];
-    user_task = source_task;
-
-    user_task.successors = nullptr;
-    user_task.predecessors = nullptr;
-
-    user_task.deps =
-        thread_malloc<kmp_target_dep_t>(nullptr, user_task.num_deps);
-    std::copy_n(source_task.deps, source_task.num_deps, user_task.deps);
-
-    gcontext->user_hash_map[user_map][user_task.task_id] = &user_task;
-
-    if (gcontext->root_tasks.count(user_task.task_id) == 1) {
-      assert(root_idx < user_map->num_roots);
-      user_map->roots[root_idx++] = &user_task;
-    }
-  }
-
-  // Copy graph structure
-  for (task_idx = 0; task_idx < user_map->num_tasks; ++task_idx) {
-    kmp_target_task_t &user_task = user_map->tasks[task_idx];
-    assert(gcontext->active_tasks.count(user_task.task_id) == 1);
-    const kmp_target_task_t &source_task =
-        gcontext->active_tasks[user_task.task_id];
-
-    kmp_target_task_list_node_t *succ = source_task.successors;
-    while (succ != nullptr) {
-      assert(succ->task != nullptr);
-      assert(gcontext->user_hash_map[user_map].count(succ->task->task_id) == 1);
-
-      kmp_target_task_t *succ_task =
-          gcontext->user_hash_map[user_map][succ->task->task_id];
-      add_to_succ_list(nullptr, &user_task, succ_task, false);
-
-      succ = succ->next;
-    }
-  }
-
-  return user_map;
-}
-
-void __kmpc_target_task_map_free(kmp_target_task_map_t *task_map) {
-  // Synchronize the access to the 'user_hash_map'
-  std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-
-  if (task_map == nullptr) {
-    return;
-  }
-
-  assertm(gcontext->user_hash_map.count(task_map) == 1,
-          "Invalid task map pointer");
-  gcontext->user_hash_map.erase(task_map);
-
-  for (int i = 0; i < task_map->num_tasks; ++i) {
-    kmp_target_task_t &task = task_map->tasks[i];
-
-    thread_free(nullptr, task.deps);
-
-    while (task.successors != nullptr) {
-      kmp_target_task_list_node_t *node = task.successors;
-      task.successors = node->next;
-      thread_free(nullptr, node);
-    }
-  }
-
-  thread_free(nullptr, task_map->roots);
-  thread_free(nullptr, task_map->tasks);
-
-  thread_free(nullptr, task_map);
-
-  // Deinit global target task context
-  deinit_target_task_context();
-}
-
-kmp_target_task_t *__kmpc_target_task_map_get(kmp_target_task_map_t *task_map,
-                                              kmp_int32 task_id) {
-  // Synchronize the access to the 'user_hash_map'
-  std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-
-  if (task_map == nullptr) {
-    return nullptr;
-  }
-
-  if (gcontext->user_hash_map.count(task_map) == 0) {
-    return nullptr;
-  }
-
-  if (gcontext->user_hash_map[task_map].count(task_id) == 0) {
-    return nullptr;
-  }
-
-  return gcontext->user_hash_map[task_map][task_id];
-}
-
-// Misc. functions
-// =============================================================================
 kmp_int32 __kmpc_target_task_current_task_id() {
   const kmp_info_t *thread = get_omp_thread();
 
@@ -587,32 +442,6 @@ kmp_int32 __kmpc_target_task_current_task_id() {
   }
 
   return thread->th.th_current_task->td_task_id;
-}
-
-bool __kmpc_is_graph_builder_tasking() {
-  if (get_omp_thread() == nullptr || gcontext->graph_builder_gtid < 0) {
-    return false;
-  }
-
-  const kmp_info_t *builder_thread =
-      __kmp_thread_from_gtid(gcontext->graph_builder_gtid);
-
-  if (builder_thread == nullptr) {
-    return false;
-  }
-	
-  if ( gcontext->graph_builder_gtid == __kmp_get_gtid()){
-    return false;
-  }
-
-  // The builder thread is executing explicit (user generated) tasks only at
-  // task level 1 or above. Further tasking levels indicate tasks created
-  // inside other explicit tasks and should also be accounted for.
-  return builder_thread->th.th_tasking_level;
-}
-
-kmp_int __kmp_get_builder_gtid(){
-  return gcontext->graph_builder_gtid;
 }
 
 bool __kmpc_has_active_tasks() {
