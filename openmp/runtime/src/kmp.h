@@ -4766,27 +4766,6 @@ struct kmp_target_task {
 // Functions used by the OpenMP Runtime to manage target tasks.
 // =============================================================================
 
-// Add a new task into the target task graph. Need to be called inside the
-// "__kmpc_omp_task_with_deps" function.
-//
-// Params:
-// - taskdata: the new task
-// - ndeps: number of normal depencies (can have aliases)
-// - dep_list: array of normal dependencies for the task
-// - ndeps_noalias: number of non-aliased dependencies (guaranteed to be unique)
-// - dep_list_noalias: array of non-aliased dependecies
-void __kmpc_add_target_task_with_deps(
-    const kmp_taskdata_t *taskdata, kmp_int32 ndeps,
-    const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
-    const kmp_depend_info_t *dep_list_noalias);
-
-// Removes an already executed task. The remove task must be one of the roots of
-// the graph (guaranteed by OpenMP runtime).
-//
-// Param:
-// - task_id: id of the task to be remove
-void __kmpc_remove_root_target_task(kmp_int32 task_id);
-
 // Gets the task id of the current (EXPLICIT/User created) task being executed
 // by the calling OpenMP thread.
 //
@@ -4837,7 +4816,6 @@ void __kmpc_scheduler_update_weights();
 void __kmpc_allow_exec();
 
 //Helpers
-bool __kmpc_has_active_tasks();
 void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg);
 
 kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);

@@ -158,8 +158,7 @@ void BaseScheduler::acquireAndScheduleGraph(kmp_tdg_info_t* tdg) {
   KG_TRACE(10,("acquireAndScheduleGraph Exit\n"));
 }
 
-int32_t BaseScheduler::scheduleTask(int32_t task_id) {
-
+int32_t BaseScheduler::scheduleTask(int32_t task_id) {	
   KG_TRACE(10,("scheduleTask start, task_id: %d\n",task_id));
   int active_devices_number = __kmpc_get_num_devices();
   int scheduled_id = -1;
@@ -190,6 +189,7 @@ int32_t BaseScheduler::scheduleTask(int32_t task_id) {
 	preScheduleTask(task_id, active_devices_number);
     	const TaskScheduleData &task_schedule = tdg->scheduling_info->schedule_map[task_id];
     	
+        KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, using scheduler : rank = %d, schedule state: %d \n",task_id, task_schedule.rank, task_schedule.state));
 	assert(task_schedule.rank != -1);
         assert(task_schedule.state == TaskState::SCHEDULED);
         
@@ -205,6 +205,8 @@ int32_t BaseScheduler::scheduleTask(int32_t task_id) {
 
 kmp_int32 BaseScheduler::get_scheduleTask(kmp_int32 task_id){
   KG_TRACE(50,("[SCHEDULER] get_scheduleTask: task_id: %d\n",task_id));
+  assert(tdg != nullptr);
+
   if(task_id == -1 || !tdg->scheduling_info->schedule_map.count(task_id))
     return 0;
   return tdg->scheduling_info->schedule_map[task_id].rank - 1;
@@ -307,22 +309,22 @@ kmp_target_dep BaseScheduler::getDep(int32_t task_id, int64_t addr) {
 }
 
 void BaseScheduler::addMemoryTasks(){
-  tdg->scheduling_info->is_launching_memory_tasks = true; //We don't want to record memory tasks
+/*  tdg->scheduling_info->is_launching_memory_tasks = true; //We don't want to record memory tasks
   kmp_int32 gtid = __kmp_get_gtid();
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
 
   for (auto &map_entry : tdg->scheduling_info->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
-//    if (isTargetDataTask(task))
-//      continue;
+    if (isTargetDataTask(task))
+      continue;
     kmp_int32 task_rank = task_schedule.rank;
 
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
-//      if (isTargetDataTask(successor))
-//        continue;
-      kmp_int32 successor_rank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
+      if (isTargetDataTask(successor))
+        continue;
+    kmp_int32 successor_rank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
 	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
@@ -349,13 +351,13 @@ void BaseScheduler::addMemoryTasks(){
   }
 
   tdg->scheduling_info->is_launching_memory_tasks = false; //We don't want to record memory tasks
-  KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
+  KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));*/
 }
 
 
 void BaseScheduler::waitScheduleGraph(){
 
-  while(!isScheduleDone && __kmpc_has_active_tasks() && !areTargetTaskRemaining()){
+  while(!isScheduleDone && !areTargetTaskRemaining()){
     std::this_thread::sleep_for(std::chrono::microseconds(10));
   }
 }    

@@ -168,6 +168,9 @@ static inline void __kmp_release_deps(kmp_int32 gtid, kmp_taskdata_t *task) {
         KA_TRACE(20, ("__kmp_release_deps: T#%d successor %p of %p scheduled "
                       "for execution.\n",
                       gtid, successor->dn.task, task));
+        KG_TRACE(20, ("__kmp_release_deps: T#%d successor %d of %d scheduled "
+                      "for execution.\n",
+                      gtid, KMP_TASK_TO_TASKDATA(successor->dn.task)->td_task_id, KMP_TASK_TO_TASKDATA(task)->td_task_id));
         // If a regular task depending on a hidden helper task, when the
         // hidden helper task is done, the regular task should be executed by
         // its encountering team.

@@ -34,14 +34,6 @@ typedef struct addr_ref {
 // =============================================================================
 using TaskPtrMap = std::unordered_map<kmp_int32, kmp_target_task_t *>;
 struct TargetTaskContext {
-  // Current active tasks
-  std::unordered_map<kmp_int32, kmp_target_task_t> active_tasks;
-
-  // Current root tasks in the task graph
-  TaskPtrMap root_tasks;
-  // Current dependency history referenced by the active tasks
-  std::unordered_map<kmp_intptr_t, addr_ref_t> dep_history;
-
   // Mutex used to protect this structure.
   std::mutex ctx_mutex;
 };
@@ -94,73 +86,6 @@ template <typename T> static T *thread_malloc(kmp_info_t *thread, size_t size) {
 
   // Fallback to normal allocation otherwise.
   return (T *)__kmp_allocate(size * sizeof(T));
-}
-
-static void thread_free(kmp_info_t *thread, void *ptr) {
-  // Use fast user space de-allocation if an OpenMP thread context is available.
-  if (thread != nullptr) {
-#if USE_FAST_MEMORY
-    __kmp_fast_free(thread, ptr);
-#else
-    __kmp_thread_free(thread, ptr);
-#endif
-  } else {
-    // Fallback to normal de-allocation otherwise.
-    __kmp_free(ptr);
-  }
-}
-
-static void add_to_succ_list(kmp_info_t *thread, kmp_target_task_t *target_task,
-                             kmp_target_task_t *succ_task,
-                             bool update_pred = true) {
-  // Add `succ_task` to the list of successors of `target_task`
-  auto *succ = thread_malloc<kmp_target_task_list_node_t>(thread, 1);
-  succ->task = succ_task;
-  succ->next = target_task->successors;
-  target_task->successors = succ;
-
-  // Add `target_task` to the list of predecessors of `succ_task`
-  auto *pred = thread_malloc<kmp_target_task_list_node_t>(thread, 1);
-  pred->task = target_task;
-  pred->next = succ_task->predecessors;
-  succ_task->predecessors = pred;
-
-  if (update_pred) {
-    succ_task->num_predecessors++;
-  }
-}
-
-/// Remove \p pred_task from the predecessor list of \p task and free the node.
-///
-/// This function expects \p pred_task to actually be in the list of
-/// predecessors, otherwise it will result in a SEGFAULT.
-static void remove_from_pred_list(kmp_info_t *thread, kmp_target_task_t *task,
-                                  kmp_target_task *pred_task) {
-  kmp_target_task_list_node_t *prev = nullptr;
-  kmp_target_task_list_node_t *curr = task->predecessors;
-
-  assertm(task != nullptr && pred_task != nullptr,
-          "task and pred_task cannot be null");
-
-  while (curr != nullptr && curr->task != pred_task) {
-    prev = curr;
-    curr = curr->next;
-  }
-
-  assertm(curr != nullptr && curr->task == pred_task,
-          "Expected to find predecessor task in the current list");
-
-  if (prev == nullptr) {
-    // If prev is null, it means that the task we are looking for is the first
-    // in the list, so we modify `task->predecessors` directly.
-    task->predecessors = curr->next;
-  } else {
-    // Otherwise make the previous node in the list point to the next of the
-    // current (which we are removing).
-    prev->next = curr->next;
-  }
-
-  thread_free(thread, curr);
 }
 
 // Returns the thread info of the current OpenMP thread. If the caller is not an
@@ -259,171 +184,6 @@ void kmp_target_task_data::copyBuffers(void **args_base_p, void **args_p,
 
 // Task and graph management
 // =============================================================================
-void __kmpc_add_target_task_with_deps(
-    const kmp_taskdata_t *taskdata, kmp_int32 ndeps,
-    const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
-    const kmp_depend_info_t *dep_list_noalias) {
-
-  std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-
-  assertm(taskdata != nullptr, "Invalid taskdata pointer");
-  assertm((ndeps > 0) == (dep_list != nullptr), "Invalid dependencies list");
-  assertm((ndeps_noalias > 0) == (dep_list_noalias != nullptr),
-          "Invalid no-alias dependencies list");
-//  assertm(gcontext->active_tasks.count(taskdata->td_task_id) == 0,
-//          "Same task added multiple times to the target task graph");
-
-  // Get general data
-  kmp_info_t *thread = get_omp_thread();
-  assertm(thread != nullptr,
-          "Function should be called inside an OpenMP thread");
-
-  // Create target task structure
-  const kmp_int32 task_id = taskdata->td_task_id;
-  kmp_target_task_t &new_task = gcontext->active_tasks[taskdata->td_task_id];
-  new_task.task_id = task_id;
-  new_task.is_target_task = (taskdata->td_target_info != nullptr);
-  if (new_task.is_target_task) {
-    new_task.target_data = *(taskdata->td_target_info);
-  }
-
-  // Process dependencies
-  new_task.deps =
-      thread_malloc<kmp_target_dep_t>(thread, ndeps + ndeps_noalias);
-  new_task.num_deps = 0;
-
-  // Filter aliased addresses and add dependencies to task
-  for (int i = 0; i < ndeps; ++i) {
-    const kmp_depend_info_t &dep = dep_list[i];
-    bool is_alias = false;
-
-    for (int j = 0; j < new_task.num_deps; ++j) {
-      kmp_target_dep_t &prev_dep = new_task.deps[j];
-      if (prev_dep.addr == dep.base_addr) {
-        prev_dep.dep_type.in |= dep.flags.in;
-        prev_dep.dep_type.out |= dep.flags.out;
-        prev_dep.dep_type.mtx |= dep.flags.mtx;
-        is_alias = true;
-        break;
-      }
-    }
-
-    if (!is_alias) {
-      new_task.deps[new_task.num_deps++] = kmp_target_dep_t{
-          .addr = dep.base_addr,
-          .dep_type = {.in = static_cast<bool>(dep.flags.in),
-                       .out = static_cast<bool>(dep.flags.out),
-                       .mtx = static_cast<bool>(dep.flags.mtx)}};
-    }
-  }
-
-  // Add no-alias dependencies
-  for (int i = 0; i < ndeps_noalias; ++i) {
-    const kmp_depend_info_t &dep = dep_list_noalias[i];
-    new_task.deps[new_task.num_deps + i] =
-        kmp_target_dep_t{.addr = dep.base_addr,
-                         .dep_type = {.in = static_cast<bool>(dep.flags.in),
-                                      .out = static_cast<bool>(dep.flags.out),
-                                      .mtx = static_cast<bool>(dep.flags.mtx)}};
-  }
-  new_task.num_deps += ndeps_noalias;
-
-  // Add task to the graph
-  for (int i = 0; i < new_task.num_deps; ++i) {
-    const kmp_target_dep_t &dep = new_task.deps[i];
-    addr_ref_t &ref = gcontext->dep_history[dep.addr];
-
-    if (dep.dep_type.out) {
-      // If we have an out dep, link the previous in tasks as our predecessors
-      // or, if no in deps is available, link the previous out dep.
-      for (auto &in_task : ref.last_ins) {
-        add_to_succ_list(thread, in_task, &new_task);
-      }
-
-      if (ref.last_ins.empty() && (ref.last_out != nullptr)) {
-        add_to_succ_list(thread, ref.last_out, &new_task);
-      }
-
-      ref.last_ins.clear();
-      ref.last_out = &new_task;
-    } else if (dep.dep_type.in) {
-      // If we have an in dep, add it to the ins list and link the previous out
-      // dep as our predecessor.
-      assert(dep.dep_type.in);
-
-      if (ref.last_out != nullptr) {
-        add_to_succ_list(thread, ref.last_out, &new_task);
-      }
-
-      ref.last_ins.push_front(&new_task);
-    }
-
-    // Note: Mtx deps are not considered when constructing the graph and should
-    // be handled by the graph user.
-  }
-
-  if (new_task.num_predecessors == 0) {
-    gcontext->root_tasks.emplace(task_id, &new_task);
-  }
-}
-
-void __kmpc_remove_root_target_task(kmp_int32 task_id) {
-  // Only one OpenMP thread can remove a task each time
-  std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-  KG_TRACE(10,("__kmpc_remove_root_target_task (start) : task id: %d\n",task_id));
-  // This function can be called for tasks without dependencies. Immediately
-  // return in these cases.
-  if (gcontext->active_tasks.count(task_id) == 0) {
-    return;
-  }
-  assertm(gcontext->root_tasks.count(task_id) == 1,
-          "Trying to remove non-root task");
-
-  // Get general data
-  kmp_info_t *thread = get_omp_thread();
-  assertm(thread != nullptr,
-          "Function should be called inside an OpenMP thread");
-
-  // Remove from root map, clear successors list and find new root tasks
-  gcontext->root_tasks.erase(task_id);
-  kmp_target_task_t &task = gcontext->active_tasks[task_id];
-  while (task.successors != nullptr) {
-    kmp_target_task_list_node_t *succ = task.successors;
-    task.successors = task.successors->next;
-
-    kmp_target_task_t *succ_task = succ->task;
-    succ_task->num_predecessors--;
-    if (succ_task->num_predecessors == 0) {
-      gcontext->root_tasks.emplace(succ_task->task_id, succ_task);
-    }
-
-    remove_from_pred_list(thread, succ_task, &task);
-    thread_free(thread, succ);
-  }
-
-  // Remove any address reference
-  for (int i = 0; i < task.num_deps; ++i) {
-    auto addr_ref = gcontext->dep_history.find(task.deps[i].addr);
-    if (addr_ref != gcontext->dep_history.end()) {
-      addr_ref_t &ref = addr_ref->second;
-
-      if (ref.last_out == &task) {
-        ref.last_out = nullptr;
-      }
-
-      ref.last_ins.remove(&task);
-
-      // If the removed reference is empty, remove it from the history
-      if (ref.last_out == nullptr && ref.last_ins.empty()) {
-        gcontext->dep_history.erase(addr_ref);
-      }
-    }
-  }
-  thread_free(thread, task.deps);
-
-  gcontext->active_tasks.erase(task_id);
-}
-
 
 kmp_int32 __kmpc_target_task_current_task_id() {
   const kmp_info_t *thread = get_omp_thread();
@@ -442,11 +202,6 @@ kmp_int32 __kmpc_target_task_current_task_id() {
   }
 
   return thread->th.th_current_task->td_task_id;
-}
-
-bool __kmpc_has_active_tasks() {
-  std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-  return gcontext->active_tasks.size() > 0;
 }
 
 //Add the array of the dependencies to a task

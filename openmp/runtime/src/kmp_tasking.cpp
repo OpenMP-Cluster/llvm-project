@@ -675,8 +675,9 @@ static void __kmp_task_start(kmp_int32 gtid, kmp_task_t *task,
   kmp_info_t *thread = __kmp_threads[gtid];
 
   KG_TRACE(10,
-           ("__kmp_task_start(enter): T#%d starting task %d: current_task=%p\n",
-            gtid, taskdata->td_task_id, current_task));
+           ("__kmp_task_start(enter): T#%d starting task %d: current_task=%p ; onced : %d; device: %d\n",
+            gtid, taskdata->td_task_id, current_task,  taskdata->td_flags.onced, __kmpc_get_task_device(taskdata->td_task_id)));
+
   for ( auto [pred, memotask] : taskdata->tdg->scheduling_info->memory_tasks) {
   	if ( memotask == task) {
 	  KG_TRACE(10,
@@ -723,7 +724,7 @@ static void __kmp_task_start(kmp_int32 gtid, kmp_task_t *task,
   // need to store current thread state (in a thread or taskdata structure)
   // before setting work_state, otherwise wrong state is set after end of task
 
-  KA_TRACE(10, ("__kmp_task_start(exit): T#%d task=%p\n", gtid, taskdata));
+  KG_TRACE(10, ("__kmp_task_start(exit): T#%d task=%p\n", gtid, taskdata));
 
   return;
 }
@@ -1069,13 +1070,12 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   kmp_int32 children = 0;
 #endif
   KG_TRACE(10, ("__kmp_task_finish(enter): T#%d finishing task %p (id: %d)and resuming "
-                "task %p\n",
-                gtid, taskdata, taskdata->td_task_id, resumed_task));
+                "task %p : onced: %d\n",
+                gtid, taskdata, taskdata->td_task_id, resumed_task,taskdata->td_flags.onced));
 
   KMP_DEBUG_ASSERT(taskdata->td_flags.tasktype == TASK_EXPLICIT);
 
 #if OMPX_TASKGRAPH
-  __kmpc_remove_root_target_task(taskdata->td_task_id);
   is_taskgraph = taskdata->is_taskgraph;
   if (is_taskgraph){
     __kmp_add_task_time(gtid, taskdata);
@@ -1195,6 +1195,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   if (completed) {
     taskdata->td_flags.complete = 1; // mark the task as completed
 #if OMPX_TASKGRAPH
+    KG_TRACE(10, ("__kmp_task_finish: T#%d marking task %p (id: %d) as onced\n ", gtid, taskdata, taskdata->td_task_id));
     taskdata->td_flags.onced = 1; // mark the task as ran once already
 #endif
 

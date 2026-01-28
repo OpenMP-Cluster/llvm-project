@@ -721,51 +721,42 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
   __kmp_fulfill_event(&(td->td_allow_completion_event));
 }
 
+static void __kmp_print_node (kmp_int32 gtid, kmp_taskdata_t* taskdata) {
+  KG_TRACE(10,("T#%d: task%d has %d predecessors \n",gtid,taskdata->td_task_id, taskdata->td_depnode->dn.npredecessors.load()));
+  KG_TRACE(10,("T#%d: task%d successor list: ",gtid,taskdata->td_task_id));
+  kmp_depnode_list_t* it = taskdata->td_depnode->dn.successors;
+  while ( it != nullptr) {
+    KG_TRACE(10,("%d, ",KMP_TASK_TO_TASKDATA(it->node->dn.task)->td_task_id));
+    it = it->next;
+  }
+  KG_TRACE(10,("\n"));
+}
 
 
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph){
   // Lambda function that apply the task
   // TODO: update this function to do real memory transfer
   KG_TRACE(20,("[SCHEDULER-MT]  __kmp_create_memory_task (begin)\n "));
-    /*  auto Fn = +[](int gtid, kmp_task_t *task) {
-    auto *mem_task_args =
-     reinterpret_cast<kmp_memory_task_args_t *>(task->shareds);
-    printf("Memory Task: ");
-    printf("dst_device=%d, src_device=%d, hst_ptr=%p\n",
-    mem_task_args->DstDevice, mem_task_args->SrcDevice, mem_task_args->Dst);
-
-    void (*tgt_target_memtask)(void *, int64_t , int64_t , int64_t);
-    *(void **)(&tgt_target_memtask) = KMP_DLSYM("__tgt_target_memtask");
-    KMP_ASSERT(tgt_target_memtask);
-    tgt_target_memtask(mem_task_args->Dst, mem_task_args->Length,
-    mem_task_args->DstDevice, mem_task_args->SrcDevice);
-
-    kmp_info_t *thread = __kmp_threads[gtid];
-#if USE_FAST_MEMORY
-    __kmp_fast_free(thread, mem_task_args);
-#else
-    __kmp_thread_free(thread, mem_task_args);
-#endif
-    };
-*/
- auto Fn = memory_task_entry;
- kmp_info_t *thread = __kmp_threads[gtid];
+  __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(source));
+  __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(target));
+  auto Fn = memory_task_entry;
+  kmp_info_t *thread = __kmp_threads[gtid];
 
 #if USE_FAST_MEMORY
- auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
- __kmp_fast_allocate(thread, sizeof(kmp_memory_task_args_t)));
+  auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
+  __kmp_fast_allocate(thread, sizeof(kmp_memory_task_args_t)));
 #else
- auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
- __kmp_thread_malloc(thread, sizeof(kmp_memory_task_args_t)));
+  auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
+  __kmp_thread_malloc(thread, sizeof(kmp_memory_task_args_t)));
 #endif
 
- mem_task_args->Dst = dep_addr;
- mem_task_args->Src = dep_addr;
- mem_task_args->DstDevice = target_device;
- mem_task_args->SrcDevice = source_device;
- mem_task_args->Length = size_addr;
- mem_task_args->DstOffset = 0;
- mem_task_args->SrcOffset = 0;
+  mem_task_args->Dst = dep_addr;
+  mem_task_args->Src = dep_addr;
+  mem_task_args->DstDevice = target_device;
+  mem_task_args->SrcDevice = source_device;
+  mem_task_args->Length = size_addr;
+  mem_task_args->DstOffset = 0;
+  mem_task_args->SrcOffset = 0;
 
  // Alloc the memory task
  kmp_task_t *memory_task = __kmpc_omp_target_task_alloc(
@@ -804,6 +795,10 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   new_node->next = node_succ;
   memory_taskdata->td_depnode->dn.successors = new_node;
   KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;
+  __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(source));
+  __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(target));
+  __kmp_print_node(gtid,memory_taskdata);
+
   KG_TRACE(30,("__kmp_create_memory_task (exit)\n"));
   return memory_task;
 }
@@ -1127,12 +1122,6 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
   }
 #endif /* OMPT_OPTIONAL */
 #endif /* OMPT_SUPPORT */
-
-#if OMPX_TASKGRAPH
-  // Add task to libomptarget task graph
-  __kmpc_add_target_task_with_deps(new_taskdata, ndeps, dep_list, ndeps_noalias,
-                                   noalias_dep_list);
-#endif
 
   bool serial = current_task->td_flags.team_serial ||
                 current_task->td_flags.tasking_ser ||
