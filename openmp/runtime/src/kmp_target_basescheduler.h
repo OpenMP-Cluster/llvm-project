@@ -59,13 +59,13 @@ public:
 protected:
   // Info for task-graph dumping.
   std::string graph_dump_dir_path;
-  int graph_counter;
+  kmp_int32 graph_counter;
 
-  int32_t schedulingThread = -1;
+  kmp_int32 schedulingThread = -1;
   bool isScheduleDone;
   kmp_tdg_info *tdg;
 
-//Scheduling policies
+  // Scheduling policies
   kmp_int32 initial_schedule_policy = 0;
   kmp_int32 initial_iteration = 0;
   kmp_int32 rescheduling_interval = 0;
@@ -77,22 +77,22 @@ public:
 
   void acquireAndScheduleGraph(kmp_tdg_info_t* tdg);
   void acquireAndScheduleGraphRR(kmp_tdg_info_t* tdg, kmp_int32 offset);
-  int32_t scheduleTask(int32_t task_id);
+  kmp_int32 scheduleTask(kmp_int32 task_id);
   kmp_int32 get_scheduleTask(kmp_int32 task_id);
-  void pinTask(int32_t task_id, int DeviceId);
-  void setTaskState(int32_t task_id, TaskState new_state);
-  void setTaskState(int32_t task_id, int device_id, TaskState new_state);
-  //  void setTaskSourceLocation(int32_t task_id, ident_t *loc);
+  void pinTask(kmp_int32 task_id, kmp_int32 DeviceId);
+  void setTaskState(kmp_int32 task_id, TaskState new_state);
+  void setTaskState(kmp_int32 task_id, kmp_int32 device_id, TaskState new_state);
+  //void setTaskSourceLocation(int32_t task_id, ident_t *loc);
 
   bool areTargetTaskRemaining() { return remaining_target_tasks > 0; }
-  kmp_target_dep getDep(int32_t task_id, int64_t addr);
-  TaskScheduleData getTask(int task_id);
+  kmp_target_dep getDep(kmp_int32 task_id, kmp_int64 addr);
+  TaskScheduleData getTask(kmp_int32 task_id);
 
   void waitScheduleGraph();
   void setIsScheduleDone(bool state);
-  void setSchedulingThread(int32_t gtid);
+  void setSchedulingThread(kmp_int32 gtid);
   void resetSchedulingThread();
-  bool isSchedulingThread(int32_t gtid); 
+  bool isSchedulingThread(kmp_int32 gtid); 
   void resetTasksState();
   void resetMemoryTasks();
   void resetTasksRank();
@@ -107,9 +107,6 @@ private:
 public:
   /// Dump the task graph to a graphviz "dot" file.
   virtual void dumpTaskGraph();
-  /// Return the list of successor ranks of a given data task if the HEFT
-  /// scheduler is enabled
-
   virtual void resetWeight() = 0;
 
 private:
@@ -124,7 +121,7 @@ private:
   /// This function can be useful for schedulers that do not schedule the whole
   /// graph prior to the tasks execution or for the ones that modify the graph
   /// scheduling at task execution time.
-  virtual void preScheduleTask(int32_t task_schedule, int32_t) = 0;
+  virtual void preScheduleTask(kmp_int32 task_schedule, kmp_int32) = 0;
 
 public:
   struct LockGuard {
@@ -142,7 +139,7 @@ namespace detail {
 
 /// Return a string indicating which color an edge should be in the task graph
 /// dump.
-static inline const char *getEdgeColor(int32_t Rank1, int32_t Rank2) {
+static inline const char *getEdgeColor(kmp_int32 Rank1,kmp_int32 Rank2) {
   if (Rank1 == -1 || Rank2 == -1)
     return "black";
   if (Rank1 == Rank2)

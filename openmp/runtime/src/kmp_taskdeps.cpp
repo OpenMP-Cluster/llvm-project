@@ -320,7 +320,7 @@ static inline kmp_int32
 __kmp_depnode_link_successor(kmp_int32 gtid, kmp_info_t *thread,
                              kmp_task_t *task, kmp_depnode_t *node,
                              kmp_depnode_list_t *plist) {
-  KG_TRACE(3330,("__kmp_depnode_link_successor_list (begin) \n"));
+  KG_TRACE(30,("__kmp_depnode_link_successor_list (begin) \n"));
   if (!plist)
     return 0;
   kmp_int32 npredecessors = 0;
@@ -718,7 +718,7 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
 
   kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(task);
 
-  __kmp_fulfill_event(&(td->td_allow_completion_event));
+  //__kmp_fulfill_event(&(td->td_allow_completion_event));
 }
 
 static void __kmp_print_node (kmp_int32 gtid, kmp_taskdata_t* taskdata) {
@@ -734,12 +734,15 @@ static void __kmp_print_node (kmp_int32 gtid, kmp_taskdata_t* taskdata) {
 
 
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph){
-  // Lambda function that apply the task
-  // TODO: update this function to do real memory transfer
+
   KG_TRACE(20,("[SCHEDULER-MT]  __kmp_create_memory_task (begin)\n "));
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(source));
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(target));
   auto Fn = memory_task_entry;
+  // Setup the hidden helper flags
+  int32_t Flags = 0;
+  kmp_tasking_flags_t *InputFlags = (kmp_tasking_flags_t *)&Flags;
+  InputFlags->hidden_helper = 1;
   kmp_info_t *thread = __kmp_threads[gtid];
 
 #if USE_FAST_MEMORY
@@ -760,14 +763,14 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
 
  // Alloc the memory task
  kmp_task_t *memory_task = __kmpc_omp_target_task_alloc(
-  nullptr, gtid, 0, sizeof(kmp_task_t), 0, reinterpret_cast<kmp_routine_entry_t>(Fn),
+  nullptr, gtid, Flags, sizeof(kmp_task_t), 0, reinterpret_cast<kmp_routine_entry_t>(Fn),
   -1, nullptr, 0, nullptr, nullptr, nullptr, nullptr 
   );
 
  if (!memory_task) {
    return nullptr;
  }
- __kmpc_task_allow_completion_event(nullptr, gtid, memory_task);
+// __kmpc_task_allow_completion_event(nullptr, gtid, memory_task);
  kmp_taskdata_t *memory_taskdata = KMP_TASK_TO_TASKDATA(memory_task);
  memory_taskdata->is_taskgraph = is_taskgraph;
  memory_taskdata->tdg = KMP_TASK_TO_TASKDATA(source)->tdg;
@@ -775,13 +778,40 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
  memory_task->shareds = static_cast<void *>(mem_task_args);
 
  // Create a new depend object for the memory task
- auto dep_addr_ptr = reinterpret_cast<kmp_intptr_t>(dep_addr);
- kmp_depend_info_t mem_task_dep[1] = {
-  {dep_addr_ptr, size_addr, {KMP_DEP_INOUT}}};
+ //auto dep_addr_ptr = reinterpret_cast<kmp_intptr_t>(dep_addr);
+ //kmp_depend_info_t mem_task_dep[1] = {
+ // {dep_addr_ptr, size_addr, {KMP_DEP_INOUT}}};
            // Launch the helper task
-  __kmpc_omp_task_with_deps(nullptr, gtid, memory_task, 1,
-                                    mem_task_dep, 0, nullptr);
+  //TODO : Replace this
+  //__kmpc_omp_task_with_deps(nullptr, gtid, memory_task, 1,
+  //                                  mem_task_dep, 0, nullptr);
+// Create the dependency node
+// task_with_deps
+#if USE_FAST_MEMORY
+  kmp_depnode_t *node =
+      (kmp_depnode_t *)__kmp_fast_allocate(thread, sizeof(kmp_depnode_t));
+#else
+  kmp_depnode_t *node =
+      (kmp_depnode_t *)__kmp_thread_malloc(thread, sizeof(kmp_depnode_t));
+#endif
+  __kmp_init_node(node, /*on_stack=*/false);
+  memory_taskdata->td_depnode = node;
+//check_deps
+  node->dn.npredecessors = -1;
 
+  // __kmp_process_deps
+    // __kmp_depnode_link_successor
+      // __kmp_track_dependence
+     //kmp_add_node
+     //Inc npred 
+  KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors = __kmp_add_node(thread, KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors, node);
+  node->dn.successors = __kmp_add_node(thread, node->dn.successors, KMP_TASK_TO_TASKDATA(target)->td_depnode);
+  node->dn.npredecessors.fetch_add(2);
+  KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors.fetch_add(1);
+  node->dn.task = memory_task;
+  KMP_MB();
+  /*
+  //Could use kmp_add_node
 #if USE_FAST_MEMORY
   auto new_node = static_cast<kmp_depnode_list_t *>(
   __kmp_fast_allocate(thread, sizeof(kmp_depnode_list_t)));
@@ -794,7 +824,19 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   new_node->node = KMP_TASK_TO_TASKDATA(target)->td_depnode;
   new_node->next = node_succ;
   memory_taskdata->td_depnode->dn.successors = new_node;
-  KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;
+  
+#if USE_FAST_MEMORY
+  auto new_node_source = static_cast<kmp_depnode_list_t *>(
+  __kmp_fast_allocate(thread, sizeof(kmp_depnode_list_t)));
+#else
+   auto new_node_source = static_cast<kmp_depnode_list_t *>(
+    __kmp_thread_malloc(thread, sizeof(kmp_depnode_list_t)));
+#endif
+    new_node_source->node = memory_taskdata->td_depnode;
+    new_node_source->next = KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors;
+    KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors = new_node_source;
+
+  KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;*/
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(source));
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(target));
   __kmp_print_node(gtid,memory_taskdata);

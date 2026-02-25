@@ -17,20 +17,8 @@
 #include "kmp_target_graph_roundrobin.h"
 #include "kmp_target_roundrobin.h"
 
-static int32_t num_devices = -1;
-
 int32_t __kmpc_get_num_devices(){
-  if (num_devices !=-1)
-    return num_devices;
-  int32_t runtime_device_number = omp_get_num_devices();
-  const char *str = std::getenv("OMPCLUSTER_NUM_DEVICES");
-  int32_t devices_env = (str != nullptr) ? std::stoi(str) : runtime_device_number;
-
-  if(runtime_device_number != devices_env){
-    KG_TRACE(10,("__kmpc_get_num_devices: forcing the number of devicesi\n"));
-    return num_devices= devices_env;
-  }
-  return num_devices = runtime_device_number;
+  return omp_get_num_devices();
 }
 
 // Strings allowed to be passed in the OMPCLUSTER_SCHEDULER environment
@@ -132,38 +120,49 @@ void __kmpc_waitScheduleGraph(){
 }
 
 int32_t __kmpc_scheduleTask(int32_t task_id) {
+  KG_TRACE(90,("__kmpc_scheduleTask Start\n"));
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   }
   BaseScheduler::LockGuard SchLk(scheduler);
+  KG_TRACE(90,("__kmpc_scheduleTask End\n"));
   return scheduler->scheduleTask(task_id);
 }
 
 kmp_int32 __kmpc_get_task_device(kmp_int32 task_id) {
+  KG_TRACE(90,("__kmpc_get_task_device Start\n"));
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   }
   BaseScheduler::LockGuard SchLk(scheduler);
+  KG_TRACE(90,("__kmpc_get_task_device End\n"));
   return scheduler->get_scheduleTask(task_id);
 }
 
 void __kmpc_pinTask(int32_t task_id, int DeviceId) {
+  KG_TRACE(90,("__kmpc_pinTask Start\n"));
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->pinTask(task_id, DeviceId);
+  KG_TRACE(90,("__kmpc_pinTask End\n"));
 }
 
 void __kmpc_setTaskState(int32_t task_id, TaskState new_state) {
+  KG_TRACE(90,("__kmpc_setTaskState Start\n"));
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->setTaskState(task_id, new_state);
+  KG_TRACE(90,("__kmpc_setTaskState End\n"));
 }
 
 void __kmpc_setTaskStateWithDevice(int32_t task_id, int device_id,
                                    TaskState new_state) {
+  KG_TRACE(90,("__kmpc_setTaskStateWithDevice Start\n"));
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->setTaskState(task_id, device_id, new_state);
+  KG_TRACE(90,("__kmpc_setTaskStateWithDevice End\n"));
 }
 
 kmp_target_dep __kmpc_getDep(int32_t task_id, int64_t addr) {
+  KG_TRACE(90,("__kmpc_getDep Start\n"));
   return scheduler->getDep(task_id, addr);
 }
 
@@ -171,11 +170,13 @@ void __kmpc_dumpTaskGraph() { scheduler->dumpTaskGraph(); }
 
 // fixme: can be simplified?
 const void *__kmpc_GetCurrentOutlinedFnID() {
+  KG_TRACE(90,("__kmpc_GetCurrentOutlinedFnID Start\n"));
   if (scheduler == nullptr)
     return nullptr;
   BaseScheduler::LockGuard SchLk(scheduler);
   const int CurrTaskID = __kmpc_target_task_current_task_id();
   TaskScheduleData ScheduleData = scheduler->getTask(CurrTaskID);
+  KG_TRACE(90,("__kmpc_GetCurrentOutlinedFnID End\n"));
 
   if (!ScheduleData.task)
     return nullptr;
@@ -183,28 +184,35 @@ const void *__kmpc_GetCurrentOutlinedFnID() {
 }
 
 void __kmpc_reset_scheduler_barrier(){
+  KG_TRACE(90,(" __kmpc_reset_scheduler_barrier Start\n"));
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   } 
  BaseScheduler::LockGuard SchLk(scheduler);
  scheduler->setIsScheduleDone(0);
  scheduler->resetSchedulingThread();
+ KG_TRACE(90,(" __kmpc_reset_scheduler_barrier End\n"));
 }
 
 void __kmpc_allow_exec(){
+ KA_TRACE(90,(" __kmpc_allow_exec Start\n"));
  assert(scheduler != nullptr);
  BaseScheduler::LockGuard SchLk(scheduler);
  scheduler->setIsScheduleDone(1);
+ KA_TRACE(90,(" __kmpc_allow_exec End\n"));
 }
 
 void __kmpc_reset_schedule_map(kmp_tdg_info_t* tdg){
+ KG_TRACE(90,("__kmpc_reset_schedule_map Start\n"));
   if (scheduler == nullptr)
     return ;
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->resetTasksState();
+ KG_TRACE(90,("__kmpc_reset_schedule_map End\n"));
 } 
 
 void __kmpc_scheduler_update_weights(){
+ KG_TRACE(90,(" __kmpc_scheduler_update_weights Start\n"));
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   } 
@@ -212,15 +220,16 @@ void __kmpc_scheduler_update_weights(){
   scheduler->resetWeight();
   scheduler->resetTasksRank();
   scheduler->resetMemoryTasks();
+ KG_TRACE(90,(" __kmpc_scheduler_update_weights End\n"));
 }
 
 void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg){
   for ( kmp_int32 tdg_task_id = 0; tdg_task_id < tdg->num_tasks ; tdg_task_id++){
-     KG_TRACE(20,("[Inter HEFT]: Task %d:\n",tdg_task_id));
+     KG_TRACE(100,("[Inter HEFT]: Task %d:\n",tdg_task_id));
     for (kmp_int32 device = 0 ; device < __kmpc_get_num_devices(); device++) {
-     KG_TRACE(20,("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number));
+     KG_TRACE(100,("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number));
     } 
-     KG_TRACE(20,("\n"));
+     KG_TRACE(100,("\n"));
   }
 }
 

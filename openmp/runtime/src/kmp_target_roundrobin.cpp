@@ -13,7 +13,7 @@
 
 #include "kmp_target_roundrobin.h"
 
-void RoundRobinScheduler::preScheduleTask(int32_t task_id, int32_t NumDevices) {
+void RoundRobinScheduler::preScheduleTask(kmp_int32 task_id, kmp_int32 NumDevices) {
 
   assert(tdg->scheduling_info->schedule_map.count(task_id) == 1);
   auto &schedule_data = tdg->scheduling_info->schedule_map[task_id];

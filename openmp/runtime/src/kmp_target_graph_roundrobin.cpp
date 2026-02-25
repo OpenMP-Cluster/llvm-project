@@ -18,9 +18,9 @@
 void GraphRoundRobinScheduler::scheduleGraph() {
 
   // Graph based round-robin algorithm.
-  int task_counter = 0;
+  kmp_int32 task_counter = 0;
 
-  int NumDevices = __kmpc_get_num_devices();
+  kmp_int32 NumDevices = __kmpc_get_num_devices();
   for (auto &map_entry : tdg->scheduling_info->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;

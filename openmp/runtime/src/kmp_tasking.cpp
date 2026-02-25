@@ -2942,12 +2942,13 @@ void __kmpc_task_reduction_modifier_fini(ident_t *loc, int gtid, int is_ws) {
 
 // __kmpc_taskgroup: Start a new taskgroup
 void __kmpc_taskgroup(ident_t *loc, int gtid) {
+  KH_TRACE(10, ("__kmpc_taskgroup: T#%d loc=%p\n", gtid, loc));
   __kmp_assert_valid_gtid(gtid);
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *taskdata = thread->th.th_current_task;
   kmp_taskgroup_t *tg_new =
       (kmp_taskgroup_t *)__kmp_thread_malloc(thread, sizeof(kmp_taskgroup_t));
-  KA_TRACE(10, ("__kmpc_taskgroup: T#%d loc=%p group=%p\n", gtid, loc, tg_new));
+  KH_TRACE(10, ("__kmpc_taskgroup: T#%d loc=%p group=%p\n", gtid, loc, tg_new));
   KMP_ATOMIC_ST_RLX(&tg_new->count, 0);
   KMP_ATOMIC_ST_RLX(&tg_new->cancel_request, cancel_noreq);
   tg_new->parent = taskdata->td_taskgroup;
@@ -5602,7 +5603,7 @@ void __kmp_print_tdg_dot(kmp_tdg_info_t *tdg, kmp_int32 gtid) {
 // tdg:    ID of the TDG
 void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   KMP_DEBUG_ASSERT(tdg->tdg_status == KMP_TDG_READY);
-  KG_TRACE(10, ("__kmp_exec_tdg(enter): T#%d tdg_id=%d num_roots=%d\n", gtid,
+  KH_TRACE(10, ("__kmp_exec_tdg(enter): T#%d tdg_id=%d num_roots=%d\n", gtid,
                 tdg->tdg_id, tdg->num_roots));
   kmp_node_info_t *this_record_map = tdg->record_map;
   kmp_int32 *this_root_tasks = tdg->root_tasks;
@@ -5674,14 +5675,14 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   }
 
   for( auto [id,task]: tdg->scheduling_info->schedule_map) {
-    KG_TRACE(10, ("[exec_tdg:] Task %d scheduled on rank %d\n", id, task.rank));
+    KH_TRACE(10, ("[exec_tdg:] Task %d scheduled on rank %d\n", id, task.rank));
   }
 
 
   for (kmp_int32 j = 0; j < this_num_roots; ++j) {
     __kmp_omp_task(gtid, this_record_map[this_root_tasks[j]].task, true);
   }
-  KG_TRACE(10, ("__kmp_exec_tdg(exit): T#%d tdg_id=%d num_roots=%d\n", gtid,
+  KH_TRACE(10, ("__kmp_exec_tdg(exit): T#%d tdg_id=%d num_roots=%d\n", gtid,
                 tdg->tdg_id, tdg->num_roots));
 }
 
@@ -5745,32 +5746,39 @@ kmp_int32 __kmpc_start_record_task(ident_t *loc_ref, kmp_int32 gtid,
 
   kmp_int32 res;
   kmp_taskgraph_flags_t *flags = (kmp_taskgraph_flags_t *)&input_flags;
-  KG_TRACE(10,
+  KH_TRACE(10,
            ("__kmpc_start_record_task(enter): T#%d loc=%p flags=%d tdg_id=%d\n",
             gtid, loc_ref, input_flags, tdg_id));
 
   if (__kmp_max_tdgs == 0) {
-    KG_TRACE(
+    KH_TRACE(
         10,
         ("__kmpc_start_record_task(abandon): T#%d loc=%p flags=%d tdg_id = %d, "
          "__kmp_max_tdgs = 0\n",
          gtid, loc_ref, input_flags, tdg_id));
     return 1;
   }
-
+  KH_TRACE(10,("__kmpc_start_record_task : before task group\n"));
   __kmpc_taskgroup(loc_ref, gtid);
+  KH_TRACE(10,("__kmpc_start_record_task : after task group\n"));
   if (kmp_tdg_info_t *tdg = __kmp_find_tdg(tdg_id)) {
     // TODO: use re_record flag
+  KH_TRACE(10,
+           ("__kmpc_start_record_task: T#%d Replaying tdg %d\n",
+            gtid, tdg_id));
     __kmp_exec_tdg(gtid, tdg);
     res = 0;
   } else {
+  KH_TRACE(10,
+           ("__kmpc_start_record_task: T#%d setting up tdg %d\n",
+            gtid, tdg_id));
     __kmp_curr_tdg_idx = tdg_id;
     KMP_DEBUG_ASSERT(__kmp_curr_tdg_idx < __kmp_max_tdgs);
     __kmp_start_record(gtid, flags, tdg_id);
     __kmp_num_tdg++;
     res = 1;
   }
-  KG_TRACE(10, ("__kmpc_start_record_task(exit): T#%d TDG %d starts to %s\n",
+  KH_TRACE(10, ("__kmpc_start_record_task(exit): T#%d TDG %d starts to %s\n",
                 gtid, tdg_id, res ? "record" : "execute"));
   return res;
 }

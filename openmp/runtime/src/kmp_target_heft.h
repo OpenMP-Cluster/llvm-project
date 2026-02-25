@@ -36,11 +36,11 @@ using PriorityQueue = std::deque<std::pair<TaskPtr, double>>;
 /// Identifies which rank, thread pair the task should be executed at.
 struct DeviceId {
   /// The MPI rank of the worker node.
-  int32_t Rank;
+  kmp_int32 Rank;
   /// The ID of the event handler thread.
-  int32_t Thread;
+  kmp_int32 Thread;
 
-  explicit DeviceId(int32_t Rank, int32_t Thread = -1)
+  explicit DeviceId(kmp_int32 Rank, kmp_int32 Thread = -1)
       : Rank(Rank), Thread(Thread) {}
 
   explicit DeviceId(const TaskScheduleData &Data)
@@ -57,8 +57,8 @@ struct DeviceId {
   /// Hashing function for this type so we can use it as unordered map keys
   struct Hash {
     size_t operator()(const DeviceId &Device) const {
-      return std::hash<int32_t>()(Device.Rank) ^
-             std::hash<int32_t>()(Device.Thread);
+      return std::hash<kmp_int32>()(Device.Rank) ^
+             std::hash<kmp_int32>()(Device.Thread);
     }
   };
 };
@@ -171,7 +171,7 @@ public:
 
   /// Build a list of device ids from the total number of ranks and handler
   /// threads.
-  std::vector<DeviceId> buildDeviceList(int32_t NumRanks) const;
+  std::vector<DeviceId> buildDeviceList(kmp_int32 NumRanks) const;
 
   /// Clear the structures used by the context.
   void clear();
@@ -182,10 +182,10 @@ public:
   void extrapolateCompCost(kmp_int32 scheduling_iteration_counter, kmp_int32 scheduling_policy, kmp_int32 initial_iteration);
  
   /// Set a new task map.
-  void setTaskMap(int32_t tdg_idx);
+  void setTaskMap(kmp_int32 tdg_idx);
 
   // Dump internal HEFT information to a file.
-  void dump(int32_t NumDevices);
+  void dump(kmp_int32 NumDevices);
 
 private:
   void computeAvgCompCosts();
@@ -250,7 +250,7 @@ private:
   /// Default communication cost of tasks
   double DefaultCommCost;
   /// Number of threads in each node to choose from.
-  int NumThreads;
+  kmp_int32 NumThreads;
   /// List of tasks to be scheduled
   kmp_tdg_info *tdg;
   /// Earliest start time
@@ -292,7 +292,7 @@ public:
   ~HEFTScheduler() {}
 
 public:
-  std::unordered_map<int32_t, std::set<int>> dataTaskSuccessorRanks;
+  std::unordered_map<kmp_int32, std::set<int>> dataTaskSuccessorRanks;
 
 private:
   /// Run HEFT scheduling algorithm.
@@ -302,7 +302,7 @@ private:
   void acquireNewGraphPost() override;
 
   /// Do nothing.
-  void preScheduleTask(int32_t task_id, int32_t) override {}
+  void preScheduleTask(kmp_int32 task_id, kmp_int32) override {}
   
   void resetWeight() override;
 

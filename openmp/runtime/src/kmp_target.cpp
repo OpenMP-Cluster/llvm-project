@@ -24,54 +24,6 @@
 
 #define assertm(exp, msg) assert(((void)msg, exp));
 
-// Address dep collision structure
-typedef struct addr_ref {
-  kmp_target_task_t *last_out = nullptr;
-  std::list<kmp_target_task_t *> last_ins;
-} addr_ref_t;
-
-// Global graph variables and configurations
-// =============================================================================
-using TaskPtrMap = std::unordered_map<kmp_int32, kmp_target_task_t *>;
-struct TargetTaskContext {
-  // Mutex used to protect this structure.
-  std::mutex ctx_mutex;
-};
-static TargetTaskContext *gcontext = nullptr;
-static std::atomic<int> gcontext_referece_count(0);
-
-// Initialize and finalize the target task integration
-// =============================================================================
-__attribute__((constructor)) static void init_target_task_context() {
-  int old_count = gcontext_referece_count++;
-
-  if (old_count == 0) {
-    gcontext = new TargetTaskContext;
-  } else {
-    // The other threads must wait for `gcontext` to be constructed. Since
-    // this only happens when more than one thread enters this function
-    // at once, busy waiting should be enough.
-    while (gcontext == nullptr);
-  }
-
-  KA_TRACE(20, ("init_target_task_context: new user registered, currently %d "
-                "users depend on target-task integration",
-                old_count + 1));
-}
-
-__attribute__((destructor)) static void deinit_target_task_context() {
-  int old_count = gcontext_referece_count--;
-  assert(old_count > 0);
-
-  if (old_count == 1 && gcontext != nullptr) {
-    delete gcontext;
-  }
-
-  KA_TRACE(20, ("deinit_target_task_context: user unregistered, currently %d "
-                "users depend on target-task integration",
-                old_count - 1));
-}
-
 // Helper functions
 // =============================================================================
 template <typename T> static T *thread_malloc(kmp_info_t *thread, size_t size) {
@@ -148,6 +100,7 @@ kmp_target_task_data::operator=(const kmp_target_task_data &other) {
 }
 
 void kmp_target_task_data::allocBuffers() {
+  KG_TRACE(10,("kmp_target_task_data::allocBuffers (start)\n"));
   if (num_args > 0) {
     // TODO: Check why we cannot use thread fast allocation without getting
     // address errors when freeing them.
@@ -156,9 +109,11 @@ void kmp_target_task_data::allocBuffers() {
     arg_sizes = (kmp_int64 *)__kmp_allocate(sizeof(kmp_int64) * num_args);
     arg_types = (kmp_int64 *)__kmp_allocate(sizeof(kmp_int64) * num_args);
   }
+  KG_TRACE(10,("kmp_target_task_data::allocBuffers (end)\n"));
 }
 
 void kmp_target_task_data::deleteBuffers() {
+  KG_TRACE(10,("kmp_target_task_data::deleteBuffers (start)\n"));
   if (num_args > 0) {
     __kmp_free(args_base);
     __kmp_free(args);
@@ -169,17 +124,20 @@ void kmp_target_task_data::deleteBuffers() {
   args = nullptr;
   arg_sizes = nullptr;
   arg_types = nullptr;
+  KG_TRACE(10,("kmp_target_task_data::deleteBuffers (end)\n"));
 }
 
 void kmp_target_task_data::copyBuffers(void **args_base_p, void **args_p,
                                        kmp_int64 *arg_sizes_p,
                                        kmp_int64 *arg_types_p) {
+  KG_TRACE(10,("kmp_target_task_data::copyBuffers (start)\n"));
   if (num_args > 0) {
     std::copy_n(args_base_p, num_args, args_base);
     std::copy_n(args_p, num_args, args);
     std::copy_n(arg_sizes_p, num_args, arg_sizes);
     std::copy_n(arg_types_p, num_args, arg_types);
   }
+  KG_TRACE(10,("kmp_target_task_data::copyBuffers (end)\n"));
 }
 
 // Task and graph management
@@ -211,6 +169,7 @@ void __kmpc_set_deps(kmp_node_info* task, kmp_int32 ndeps,
                     const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
                     const kmp_depend_info_t *dep_list_noalias){
 
+  KG_TRACE(10,("__kmpc_set_deps (start)\n"));
   // Get general data
   kmp_int32 omp_gtid = __kmp_get_gtid();
   kmp_info_t *thread = __kmp_thread_from_gtid(omp_gtid);
@@ -254,5 +213,6 @@ void __kmpc_set_deps(kmp_node_info* task, kmp_int32 ndeps,
   }
   task->num_deps += ndeps_noalias;
 
+  KG_TRACE(10,("__kmpc_set_deps (end)\n"));
 }
 

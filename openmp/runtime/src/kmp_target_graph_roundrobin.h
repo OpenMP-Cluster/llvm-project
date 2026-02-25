@@ -34,7 +34,7 @@ private:
   void resetWeight() override {}
 
   /// Do nothing.
-  void preScheduleTask(int32_t task_id, int32_t NumDevices) override {}
+  void preScheduleTask(kmp_int32 task_id, kmp_int32 NumDevices) override {}
 };
 
 #endif /* _OMPTARGET_GRAPH_ROUNDROBIN_H */

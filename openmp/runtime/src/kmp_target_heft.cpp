@@ -57,7 +57,7 @@ void HEFTContext::computeUpwardRanks() {
   assert(tdg != nullptr && "The task map should not be NULL");
   for (auto *Task : ReverseTopologicalOrder(tdg)) {
     double MaxSuccUrankComm = 0.0;
-    for (int32_t idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
+    for (kmp_int32 idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
       auto Succ = &(tdg->record_map[Task->successors[idx_succ]]);
       MaxSuccUrankComm =
           std::max(MaxSuccUrankComm,
@@ -70,7 +70,7 @@ void HEFTContext::computeUpwardRanks() {
 double HEFTContext::computeEST(TaskPtr Task, DeviceId Device) {
   double MaxPredEST = 0.0;
   // Iterate over predecessors
-  for (int32_t idx_pred = 0 ; idx_pred < Task->npredecessors ; idx_pred++) {
+  for (kmp_int32 idx_pred = 0 ; idx_pred < Task->npredecessors ; idx_pred++) {
 
     // Ignore deferred tasks for now
     if (isDeferredTask(*Task))
@@ -150,11 +150,11 @@ PriorityQueue HEFTContext::buildQueue() const {
   return Pqueue;
 }
 
-std::vector<DeviceId> HEFTContext::buildDeviceList(int32_t NumRanks) const {
+std::vector<DeviceId> HEFTContext::buildDeviceList(kmp_int32 NumRanks) const {
   std::vector<DeviceId> Devices;
   Devices.reserve(NumRanks);
-  for (int32_t R = 1; R <= NumRanks; R++)
-    for (int32_t H = 0; H < NumThreads; H++)
+  for (kmp_int32 R = 1; R <= NumRanks; R++)
+    for (kmp_int32 H = 0; H < NumThreads; H++)
       Devices.emplace_back(R, H);
   return Devices;
 }
@@ -176,7 +176,7 @@ void HEFTContext::clearCompCost() {
   ComputationCost.clear();
 }
 
-void HEFTContext::setTaskMap(int32_t tdg_id) {
+void HEFTContext::setTaskMap(kmp_int32 tdg_id) {
   tdg = __kmpc_find_tdg(tdg_id);
   assert(tdg != nullptr && "Expected a non-null task map!");
 }
@@ -213,8 +213,8 @@ double HEFTContext::computeAvgCommCost(const kmp_node_info &A,
   // Look for arguments which are common between tasks A and B and accumulate
   // their sizes in bytes.
   if(A.target_data !=nullptr && B.target_data!=nullptr){
-    for (int32_t I = 0; I < A.target_data->num_args; I++) {
-      for (int32_t J = 0; J < B.target_data->num_args; J++) {
+    for (kmp_int32 I = 0; I < A.target_data->num_args; I++) {
+      for (kmp_int32 J = 0; J < B.target_data->num_args; J++) {
         if (A.target_data->args[I] == B.target_data->args[J]) {
           TotalBytes += A.target_data->arg_sizes[I];
         }
@@ -532,7 +532,7 @@ void HEFTContext::extrapolateCompCost(kmp_int32 scheduling_iteration_counter, km
 
 
 /// Dump internal HEFT information to a file.
-void HEFTContext::dump(int32_t NumDevices) {
+void HEFTContext::dump(kmp_int32 NumDevices) {
   if (HEFTLogPath.empty())
     return;
 
@@ -556,7 +556,7 @@ void HEFTContext::dump(int32_t NumDevices) {
 
   std::vector<kmp_node_info *> TasksV;
   TasksV.reserve(tdg->num_tasks);
-  for (int i = 0; i < tdg->num_tasks; i++) {
+  for (kmp_int32 i = 0; i < tdg->num_tasks; i++) {
     TasksV.push_back(&(tdg->record_map[i]));
   }
 
@@ -685,13 +685,13 @@ void HEFTScheduler::scheduleGraph() {
        isExitTask(Task), Task->nsuccessors, Task->npredecessors));
 
     double MaxCost = 0.0;
-    int32_t Rank = 1;
+    kmp_int32 Rank = 1;
 
     // Find the successor with highest communication cost
     // NOTE: Exit target data tasks are temporary scheduled but the rank will
     // be overwritten later with PinTask function.
 
-    for (int32_t idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
+    for (kmp_int32 idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
       auto Succ = &(tdg->record_map[Task->successors[idx_succ]]);
       auto SuccRank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
       // Save successor ranks of each scheduled data task to detect broadcast
@@ -759,11 +759,11 @@ void HEFTScheduler::dumpTaskGraph() {
       << "  label=\"HEFT Scheduler\";\n";
 
   // For each task
-  for (int32_t tid = 0; tid < tdg->num_tasks; tid++) {
+  for (kmp_int32 tid = 0; tid < tdg->num_tasks; tid++) {
     auto task = &(tdg->record_map[tid]);
-    int32_t trank = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].rank;
+    kmp_int32 trank = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].rank;
     std::string tinfo = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].source_location;
-    int32_t state = static_cast<int32_t>(tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
+    kmp_int32 state = static_cast<kmp_int32>(tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
 
     // Print graph node
     dot << "  V" << tid << " [label=<<B>ID " << tid
@@ -784,10 +784,10 @@ void HEFTScheduler::dumpTaskGraph() {
     dot << "];\n";
 
     // Print forward arrows using the list of successors
-    for (int32_t idx = 0; idx < task->nsuccessors; idx++) {
-      int32_t sid = task->successors[idx];
+    for (kmp_int32 idx = 0; idx < task->nsuccessors; idx++) {
+      kmp_int32 sid = task->successors[idx];
       auto succ = &(tdg->record_map[task->successors[idx]]);
-      int32_t srank = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,sid)].rank;
+      kmp_int32 srank = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,sid)].rank;
       const auto *color = detail::getEdgeColor(trank, srank);
       double CommCost = Ctx.CommunicationCost[task][succ];
 
@@ -800,7 +800,7 @@ void HEFTScheduler::dumpTaskGraph() {
 
     // Print backward arrows using the list of predecessors
     if (Dump.Predecessors) {
-      for (int32_t pid = 0; pid < task->npredecessors; pid++) {
+      for (kmp_int32 pid = 0; pid < task->npredecessors; pid++) {
         dot << "  V" << pid << " -> V" << tid
             << " [style=dashed dir=back color=gray30];\n";
       }
@@ -810,7 +810,7 @@ void HEFTScheduler::dumpTaskGraph() {
   // Print a single fake entry node
   if (Dump.FakeEntryNode) {
     dot << "  Entry;\n";
-    for (int32_t rid = 0; rid < tdg->num_roots; rid++) {
+    for (kmp_int32 rid = 0; rid < tdg->num_roots; rid++) {
       dot << "  Entry -> V" << rid << ";\n";
     }
   }
@@ -818,7 +818,7 @@ void HEFTScheduler::dumpTaskGraph() {
     // Print a single fake exit node
     if (Dump.FakeExitNode) {
       dot << "  Exit;\n";
-      for (int32_t tid = 0; tid < tdg->num_tasks; tid++) {
+      for (kmp_int32 tid = 0; tid < tdg->num_tasks; tid++) {
         auto task = &(tdg->record_map[tid]);
         if (isExitTask(task))
           dot << "  V" << tid << " -> Exit;\n";

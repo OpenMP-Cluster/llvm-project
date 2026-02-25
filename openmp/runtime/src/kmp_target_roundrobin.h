@@ -36,7 +36,7 @@ private:
   void resetWeight() override {}
 
   /// Schedules the task using round robin.
-  void preScheduleTask(int32_t task_id, int32_t NumDevices) override;
+  void preScheduleTask(kmp_int32 task_id, kmp_int32 NumDevices) override;
 
 private:
   /// Number of #preScheduleTask calls.
