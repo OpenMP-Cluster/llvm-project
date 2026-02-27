@@ -114,9 +114,9 @@ void __kmpc_waitScheduleGraph(){
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   }
-  KG_TRACE(90,("__kmpc_waitScheduleGraph Start\n"));
+  // KG_TRACE(90,("__kmpc_waitScheduleGraph Start\n"));
   scheduler->waitScheduleGraph();
-  KG_TRACE(90,("__kmpc_waitScheduleGraph Exit End Wait\n"));
+  // KG_TRACE(90,("__kmpc_waitScheduleGraph Exit End Wait\n"));
 }
 
 int32_t __kmpc_scheduleTask(int32_t task_id) {

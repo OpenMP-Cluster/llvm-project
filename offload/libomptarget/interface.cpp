@@ -188,6 +188,7 @@ EXTERN void __tgt_target_data_begin_mapper(ident_t *Loc, int64_t DeviceId,
                                            void **ArgMappers) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
+  printf("(__tgt_target_data_begin): DeviceId=%d\n", DeviceId);
   targetData<AsyncInfoTy>(Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
                           ArgTypes, ArgNames, ArgMappers, targetDataBegin,
                           "Entering OpenMP data region with being_mapper",
@@ -201,6 +202,8 @@ EXTERN void __tgt_target_data_begin_nowait_mapper(
     void **ArgMappers, int32_t DepNum, void *DepList, int32_t NoAliasDepNum,
     void *NoAliasDepList) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
+  DeviceId = Schedule(Loc, DeviceId);
+  printf("(__tgt_target_data_begin): DeviceId=%d\n", DeviceId);
   targetData<TaskAsyncInfoWrapperTy>(
       Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes, ArgTypes, ArgNames,
       ArgMappers, targetDataBegin,
@@ -397,6 +400,7 @@ EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                KernelArgsTy *KernelArgs) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
+  printf("(__tgt_target_kernel): DeviceId=%d\n", DeviceId);
   if (KernelArgs->Flags.NoWait) {
     int Rc = targetKernel<TaskAsyncInfoWrapperTy>(
         Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);

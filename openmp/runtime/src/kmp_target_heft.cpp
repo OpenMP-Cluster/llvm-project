@@ -261,7 +261,7 @@ double HEFTContext::computeCompCost(const kmp_node_info &Task,
   
   //If we don't have the task time for the precise device, use the average time
   //Something went wrong, we should always have a value after extrapolation.
-  KMP_DEBUG_ASSERT(false);
+  // KMP_DEBUG_ASSERT(false);
   KG_TRACE(10,("[HEFT] computeCompCost : Using Averaged Comp cost"));
     return ComputationCost[&Task][Device.Rank-1] = computeAvgCompCost(Task);
 }

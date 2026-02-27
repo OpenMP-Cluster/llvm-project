@@ -329,10 +329,10 @@ void BaseScheduler::addMemoryTasks(){
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
 	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
             for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
-		if (task->target_data->args[I] == successor->target_data->args[J]) {//TODO: Should we compare args or args_base?
+		if (task->target_data->args_base[I] == successor->target_data->args_base[J]) {//TODO: Should we compare args or args_base?
 
-		kmp_int32 in_rank = isTargetDataTask(task) ? 0 : task_rank-1;    
-		kmp_int32 out_rank = isTargetDataTask(successor) ? 0 : successor_rank-1; 
+		kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
+		kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
 
           	kmp_task_t* memory_task= __kmp_create_memory_task(gtid,task->task,successor->task,in_rank, out_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
 
@@ -501,8 +501,11 @@ void BaseScheduler::dumpTaskGraph() {
     kmp_int32 trank = tdg->scheduling_info->schedule_map[tid].rank;
     std::string tinfo = tdg->scheduling_info->schedule_map[tid].source_location;
 
+    int task_id = KMP_TASKPTR_TO_TASKID(task);
+    printf("TASKID=%d\n", task_id);
+
     // Print graph node 
-    dot << "  V" << tid << " [label=<<B>ID " << tid
+    dot << "  V" << task_id << " [label=<<B>ID " << task_id
         << "</B><BR /><FONT POINT-SIZE=\"10\">Rank " << trank
         << ((tdg->scheduling_info->schedule_map[tid].state == TaskState::SAVED) ? "<BR />Saved\""
                                                           : "<BR />Unsaved\"");

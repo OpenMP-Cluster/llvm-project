@@ -4804,6 +4804,8 @@ KMP_EXPORT const void *__kmpc_GetCurrentOutlinedFnID();
 int __kmpc_get_num_devices();
 int omp_get_num_devices(void) __attribute__((weak));
 
+int omp_get_initial_device(void) __attribute__((weak));
+
 //Main scheduling function: Retrieve and schedule the taskgraph if needed
 void __kmpc_scheduleGraph(kmp_tdg_info_t* tdg);
 void __kmpc_reset_schedule_map(kmp_tdg_info_t* tdg);  
