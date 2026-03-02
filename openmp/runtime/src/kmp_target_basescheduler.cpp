@@ -319,17 +319,20 @@ void BaseScheduler::addMemoryTasks(){
     //if (isTargetDataTask(task))
     //  continue;
     kmp_int32 task_rank = task_schedule.rank;
-
+    KG_TRACE(10,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
     //  if (isTargetDataTask(successor))
     //    continue;
     kmp_int32 successor_rank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
+    KG_TRACE(10,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
 	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
+            KG_TRACE(10,("[SCHEDULER-MT] arg task: %d\n",task->target_data->args[I]));
             for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
-		if (task->target_data->args_base[I] == successor->target_data->args_base[J]) {//TODO: Should we compare args or args_base?
+            KG_TRACE(10,("[SCHEDULER-MT] arg successor: %d\n",successor->target_data->args[J]));
+              if (task->target_data->args_base[I] == successor->target_data->args_base[J]) {//TODO: Should we compare args or args_base?
 
 		kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
 		kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
