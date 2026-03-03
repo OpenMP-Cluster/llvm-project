@@ -2733,6 +2733,7 @@ struct kmp_tdg_scheduling {
   ScheduleMap schedule_map;
   std::vector<kmp_task_and_pred> memory_tasks;
   bool is_launching_memory_tasks = false;
+  std::atomic<kmp_int32> num_normal_tasks; // Number of TDG nodes
 };
 
 /// Structure that contains a TDG
@@ -4824,6 +4825,7 @@ kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
 kmp_int32 __kmpc_curr_tdg_idx();
 
 void __kmpc_remove_task(kmp_task_t*, kmp_task_t*);//Remove tasks and the related dependencies
+// void  __kmpc_remove_task(kmp_int32 );
 
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph);
 #endif

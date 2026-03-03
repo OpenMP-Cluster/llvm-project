@@ -716,9 +716,7 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
   __kmp_thread_free(thread, mem_task_args);
 #endif
 
-  kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(task);
 
-  //__kmp_fulfill_event(&(td->td_allow_completion_event));
 }
 
 static void __kmp_print_node (kmp_int32 gtid, kmp_taskdata_t* taskdata) {
@@ -770,23 +768,13 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
  if (!memory_task) {
    return nullptr;
  }
-// __kmpc_task_allow_completion_event(nullptr, gtid, memory_task);
+
  kmp_taskdata_t *memory_taskdata = KMP_TASK_TO_TASKDATA(memory_task);
  memory_taskdata->is_taskgraph = is_taskgraph;
  memory_taskdata->tdg = KMP_TASK_TO_TASKDATA(source)->tdg;
  // Setup the arguments for the memory task
  memory_task->shareds = static_cast<void *>(mem_task_args);
 
- // Create a new depend object for the memory task
- //auto dep_addr_ptr = reinterpret_cast<kmp_intptr_t>(dep_addr);
- //kmp_depend_info_t mem_task_dep[1] = {
- // {dep_addr_ptr, size_addr, {KMP_DEP_INOUT}}};
-           // Launch the helper task
-  //TODO : Replace this
-  //__kmpc_omp_task_with_deps(nullptr, gtid, memory_task, 1,
-  //                                  mem_task_dep, 0, nullptr);
-// Create the dependency node
-// task_with_deps
 #if USE_FAST_MEMORY
   kmp_depnode_t *node =
       (kmp_depnode_t *)__kmp_fast_allocate(thread, sizeof(kmp_depnode_t));
@@ -799,48 +787,169 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
 //check_deps
   node->dn.npredecessors = -1;
 
-  // __kmp_process_deps
-    // __kmp_depnode_link_successor
-      // __kmp_track_dependence
-     //kmp_add_node
-     //Inc npred 
   KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors = __kmp_add_node(thread, KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors, node);
   node->dn.successors = __kmp_add_node(thread, node->dn.successors, KMP_TASK_TO_TASKDATA(target)->td_depnode);
   node->dn.npredecessors.fetch_add(2);
   KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors.fetch_add(1);
   node->dn.task = memory_task;
   KMP_MB();
-  /*
-  //Could use kmp_add_node
-#if USE_FAST_MEMORY
-  auto new_node = static_cast<kmp_depnode_list_t *>(
-  __kmp_fast_allocate(thread, sizeof(kmp_depnode_list_t)));
-#else
-  auto new_node = static_cast<kmp_depnode_list_t *>(
-  __kmp_thread_malloc(thread, sizeof(kmp_depnode_list_t)));
-#endif
 
-  kmp_depnode_list_t *node_succ = memory_taskdata->td_depnode->dn.successors;
-  new_node->node = KMP_TASK_TO_TASKDATA(target)->td_depnode;
-  new_node->next = node_succ;
-  memory_taskdata->td_depnode->dn.successors = new_node;
-  
-#if USE_FAST_MEMORY
-  auto new_node_source = static_cast<kmp_depnode_list_t *>(
-  __kmp_fast_allocate(thread, sizeof(kmp_depnode_list_t)));
-#else
-   auto new_node_source = static_cast<kmp_depnode_list_t *>(
-    __kmp_thread_malloc(thread, sizeof(kmp_depnode_list_t)));
-#endif
-    new_node_source->node = memory_taskdata->td_depnode;
-    new_node_source->next = KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors;
-    KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors = new_node_source;
-
-  KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors++;*/
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(source));
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(target));
   __kmp_print_node(gtid,memory_taskdata);
 
+//Adding Memory task to the tdg
+  kmp_tdg_info_t *tdg =memory_taskdata->tdg;
+
+  // extend record_map if needed
+  if (memory_taskdata->td_tdg_task_id >= tdg->map_size) {
+    __kmp_acquire_bootstrap_lock(&tdg->graph_lock);
+    if (memory_taskdata->td_tdg_task_id >= tdg->map_size) {
+      kmp_uint old_size = tdg->map_size;
+      kmp_uint new_size = old_size * 2;
+      kmp_node_info_t *old_record = tdg->record_map;
+      kmp_node_info_t *new_record = (kmp_node_info_t *)__kmp_allocate(
+          new_size * sizeof(kmp_node_info_t));
+      KMP_MEMCPY(new_record, tdg->record_map,
+                 old_size * sizeof(kmp_node_info_t));
+      tdg->record_map = new_record;
+      for(kmp_int i =0; i<old_size;i++){
+        old_record[i].target_data = nullptr;
+      }
+      __kmp_free(old_record);
+
+      for (kmp_int i = old_size; i < new_size; i++) {
+        kmp_int32 *successorsList = (kmp_int32 *)__kmp_allocate(
+            __kmp_successors_size * sizeof(kmp_int32));
+        kmp_int32 *predecessorsList = (kmp_int32 *)__kmp_allocate(
+            __kmp_predecessors_size * sizeof(kmp_int32));
+        kmp_recorded_task_time_t *taskTimeList = (kmp_recorded_task_time_t *)__kmp_allocate(
+            __kmpc_get_num_devices() * sizeof(kmp_recorded_task_time_t));
+        new_record[i].task = nullptr;
+        new_record[i].successors = successorsList;
+        new_record[i].predecessors = predecessorsList;
+        new_record[i].nsuccessors = 0;
+        new_record[i].npredecessors = 0;
+        new_record[i].successors_size = __kmp_successors_size;
+        new_record[i].predecessors_size = __kmp_predecessors_size;
+        new_record[i].is_target_task = 0;
+        new_record[i].target_data = new kmp_target_task_data_t();
+        new_record[i].task_time = taskTimeList;
+        KMP_ATOMIC_ST_REL(&new_record[i].npredecessors_counter, 0);
+      }
+      // update the size at the end, so that we avoid other
+      // threads use old_record while map_size is already updated
+      tdg->map_size = new_size;
+    }
+  __kmp_release_bootstrap_lock(&tdg->graph_lock);
+  }
+  tdg->record_map[memory_taskdata->td_tdg_task_id].task = memory_task;
+  tdg->record_map[memory_taskdata->td_tdg_task_id].parent_task =
+     memory_taskdata->td_parent;
+  tdg->record_map[memory_taskdata->td_tdg_task_id].is_target_task = 0 ;
+  tdg->record_map[memory_taskdata->td_tdg_task_id].target_data = memory_taskdata->td_target_info;
+   
+  for ( kmp_int32 device = 0 ; device < __kmpc_get_num_devices() ; device++){
+    tdg->record_map[memory_taskdata->td_tdg_task_id].task_time[device].mean_time = -1 ;    
+    tdg->record_map[memory_taskdata->td_tdg_task_id].task_time[device].iteration_number = 0   ;    
+  }
+  KMP_ATOMIC_INC(&tdg->num_tasks);
+//Setting up the dependencies in the tdg (TODO: do it for both the predecessor and the successor)
+  kmp_taskdata_t *task_source = KMP_TASK_TO_TASKDATA(source);
+  kmp_taskdata_t *task_sink = memory_taskdata;
+
+  if (task_sink->is_taskgraph &&
+      __kmp_tdg_is_recording(task_sink->tdg->tdg_status)) {
+    kmp_node_info_t *source_info =
+        &task_sink->tdg->record_map[task_source->td_tdg_task_id];
+    bool exists = false;
+    for (int i = 0; i < source_info->nsuccessors; i++) {
+      if (source_info->successors[i] == task_sink->td_tdg_task_id) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      if (source_info->nsuccessors >= source_info->successors_size) {
+        kmp_uint old_size = source_info->successors_size;
+        source_info->successors_size = 2 * source_info->successors_size;
+        kmp_int32 *old_succ_ids = source_info->successors;
+        kmp_int32 *new_succ_ids = (kmp_int32 *)__kmp_allocate(
+            source_info->successors_size * sizeof(kmp_int32));
+        KMP_MEMCPY(new_succ_ids, old_succ_ids, old_size * sizeof(kmp_int32));
+        source_info->successors = new_succ_ids;
+        __kmp_free(old_succ_ids);
+      }
+
+      source_info->successors[source_info->nsuccessors] =
+          task_sink->td_tdg_task_id;
+      source_info->nsuccessors++;
+
+      kmp_node_info_t *sink_info =
+          &(task_sink->tdg->record_map[task_sink->td_tdg_task_id]);
+
+      if (sink_info->npredecessors+1 >= sink_info->predecessors_size) {
+        kmp_int32 old_predecessors_size = sink_info->predecessors_size;
+        sink_info->predecessors_size = 2 * sink_info->predecessors_size;
+        kmp_int32 *old_pred_ids = sink_info->predecessors;
+        kmp_int32 *new_pred_ids = (kmp_int32 *)__kmp_allocate(
+            sink_info->predecessors_size * sizeof(kmp_int32));
+        KMP_MEMCPY(new_pred_ids, old_pred_ids, old_predecessors_size * sizeof(kmp_int32));
+ 	sink_info->predecessors = new_pred_ids;
+        __kmp_free(old_pred_ids);
+      }
+      sink_info->predecessors[sink_info->npredecessors]=task_source->td_tdg_task_id;
+      sink_info->npredecessors++;
+    }
+  }
+ 
+  task_source = memory_taskdata;
+  task_sink =  KMP_TASK_TO_TASKDATA(target);
+
+  if (task_sink->is_taskgraph &&
+      __kmp_tdg_is_recording(task_sink->tdg->tdg_status)) {
+    kmp_node_info_t *source_info =
+        &task_sink->tdg->record_map[task_source->td_tdg_task_id];
+    bool exists = false;
+    for (int i = 0; i < source_info->nsuccessors; i++) {
+      if (source_info->successors[i] == task_sink->td_tdg_task_id) {
+        exists = true;
+        break;
+      }
+    }
+    if (!exists) {
+      if (source_info->nsuccessors >= source_info->successors_size) {
+        kmp_uint old_size = source_info->successors_size;
+        source_info->successors_size = 2 * source_info->successors_size;
+        kmp_int32 *old_succ_ids = source_info->successors;
+        kmp_int32 *new_succ_ids = (kmp_int32 *)__kmp_allocate(
+            source_info->successors_size * sizeof(kmp_int32));
+        KMP_MEMCPY(new_succ_ids, old_succ_ids, old_size * sizeof(kmp_int32));
+        source_info->successors = new_succ_ids;
+        __kmp_free(old_succ_ids);
+      }
+
+      source_info->successors[source_info->nsuccessors] =
+          task_sink->td_tdg_task_id;
+      source_info->nsuccessors++;
+
+      kmp_node_info_t *sink_info =
+          &(task_sink->tdg->record_map[task_sink->td_tdg_task_id]);
+
+      if (sink_info->npredecessors+1 >= sink_info->predecessors_size) {
+        kmp_int32 old_predecessors_size = sink_info->predecessors_size;
+        sink_info->predecessors_size = 2 * sink_info->predecessors_size;
+        kmp_int32 *old_pred_ids = sink_info->predecessors;
+        kmp_int32 *new_pred_ids = (kmp_int32 *)__kmp_allocate(
+            sink_info->predecessors_size * sizeof(kmp_int32));
+        KMP_MEMCPY(new_pred_ids, old_pred_ids, old_predecessors_size * sizeof(kmp_int32));
+        sink_info->predecessors = new_pred_ids;
+        __kmp_free(old_pred_ids);
+      }
+      sink_info->predecessors[sink_info->npredecessors]=task_source->td_tdg_task_id;
+      sink_info->npredecessors++;
+    }
+  }
   KG_TRACE(30,("__kmp_create_memory_task (exit)\n"));
   return memory_task;
 }
@@ -1430,7 +1539,7 @@ void __kmpc_omp_taskwait_deps_51(ident_t *loc_ref, kmp_int32 gtid,
 void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
     
   KG_TRACE(30,("__kmpc_remove_task (begin)\n"));
-  
+  //TODO: remove from tdg
   kmp_int gtid = __kmp_get_gtid();
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
