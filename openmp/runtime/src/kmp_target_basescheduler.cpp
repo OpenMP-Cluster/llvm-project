@@ -313,6 +313,7 @@ void BaseScheduler::addMemoryTasks(){
   kmp_int32 gtid = __kmp_get_gtid();
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
   tdg->scheduling_info->num_normal_tasks.store(tdg->num_tasks.load());
+  KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, tdg->num_tasks.load());
   for (auto &map_entry : tdg->scheduling_info->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
@@ -349,6 +350,7 @@ void BaseScheduler::addMemoryTasks(){
     } 
   }
 
+  KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, 0);
   tdg->scheduling_info->is_launching_memory_tasks = false; //We don't want to record memory tasks
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
 }

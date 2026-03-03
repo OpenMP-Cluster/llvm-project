@@ -800,7 +800,8 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
 
 //Adding Memory task to the tdg
   kmp_tdg_info_t *tdg =memory_taskdata->tdg;
-
+  memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
+  KG_TRACE(10,("memory task tdg id: %d\n",memory_taskdata->td_tdg_task_id));
   // extend record_map if needed
   if (memory_taskdata->td_tdg_task_id >= tdg->map_size) {
     __kmp_acquire_bootstrap_lock(&tdg->graph_lock);
@@ -858,8 +859,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   kmp_taskdata_t *task_source = KMP_TASK_TO_TASKDATA(source);
   kmp_taskdata_t *task_sink = memory_taskdata;
 
-  if (task_sink->is_taskgraph &&
-      __kmp_tdg_is_recording(task_sink->tdg->tdg_status)) {
+  if (task_sink->is_taskgraph ) {
     kmp_node_info_t *source_info =
         &task_sink->tdg->record_map[task_source->td_tdg_task_id];
     bool exists = false;
