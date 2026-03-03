@@ -726,7 +726,7 @@ void HEFTScheduler::scheduleGraph() {
 
   KG_TRACE(10,("[HEFT]: HEFT (adding memory tasks)\n"));
   addMemoryTasks();
-
+  // dumpTaskGraph();
   Ctx.dump(NumDevices);
   KG_TRACE(10,("[HEFT] End HEFT schedule.\n"));
 }
@@ -765,8 +765,10 @@ void HEFTScheduler::dumpTaskGraph() {
     std::string tinfo = tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg, tid)].source_location;
     kmp_int32 state = static_cast<kmp_int32>(tdg->scheduling_info->schedule_map[KMP_TDG_TASKID_TO_TASKID(tdg,tid)].state);
 
+    long task_id = KMP_TASKPTR_TO_TASKID(task);
+
     // Print graph node
-    dot << "  V" << tid << " [label=<<B>ID " << tid
+    dot << "  V" << task_id << " [label=<<B>ID " << task_id
         << "</B><BR /><FONT POINT-SIZE=\"10\">Rank " << trank
         << "<BR /> State: " << state;
 
@@ -791,8 +793,10 @@ void HEFTScheduler::dumpTaskGraph() {
       const auto *color = detail::getEdgeColor(trank, srank);
       double CommCost = Ctx.CommunicationCost[task][succ];
 
+      long succ_id = KMP_TASKPTR_TO_TASKID(succ);
+
       // Print graph edge
-      dot << "  V" << tid << " -> V" << sid << " [color=\"" << color << "\"";
+      dot << "  V" << task_id << " -> V" << succ_id << " [color=\"" << color << "\"";
       if (Dump.EdgeLabel)
         dot << " label=<" << CommCost << ">";
       dot << "];\n";
@@ -801,7 +805,7 @@ void HEFTScheduler::dumpTaskGraph() {
     // Print backward arrows using the list of predecessors
     if (Dump.Predecessors) {
       for (kmp_int32 pid = 0; pid < task->npredecessors; pid++) {
-        dot << "  V" << pid << " -> V" << tid
+        dot << "  V" << pid << " -> V" << task_id
             << " [style=dashed dir=back color=gray30];\n";
       }
     }
@@ -820,8 +824,9 @@ void HEFTScheduler::dumpTaskGraph() {
       dot << "  Exit;\n";
       for (kmp_int32 tid = 0; tid < tdg->num_tasks; tid++) {
         auto task = &(tdg->record_map[tid]);
+        long task_id = KMP_TASKPTR_TO_TASKID(task);
         if (isExitTask(task))
-          dot << "  V" << tid << " -> Exit;\n";
+          dot << "  V" << task_id << " -> Exit;\n";
       }
     }
     dot << "}\n";

@@ -900,14 +900,14 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
       }
       sink_info->predecessors[sink_info->npredecessors]=task_source->td_tdg_task_id;
       sink_info->npredecessors++;
+      KMP_ATOMIC_INC(&sink_info->npredecessors_counter);
     }
   }
  
   task_source = memory_taskdata;
   task_sink =  KMP_TASK_TO_TASKDATA(target);
 
-  if (task_sink->is_taskgraph &&
-      __kmp_tdg_is_recording(task_sink->tdg->tdg_status)) {
+  if (task_sink->is_taskgraph) {
     kmp_node_info_t *source_info =
         &task_sink->tdg->record_map[task_source->td_tdg_task_id];
     bool exists = false;
@@ -948,6 +948,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
       }
       sink_info->predecessors[sink_info->npredecessors]=task_source->td_tdg_task_id;
       sink_info->npredecessors++;
+      KMP_ATOMIC_INC(&sink_info->npredecessors_counter);
     }
   }
   KG_TRACE(30,("__kmp_create_memory_task (exit)\n"));

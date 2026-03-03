@@ -317,14 +317,14 @@ void BaseScheduler::addMemoryTasks(){
   for (auto &map_entry : tdg->scheduling_info->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
-    //if (isTargetDataTask(task))
-    //  continue;
+    if (isTargetDataTask(task))
+     continue;
     kmp_int32 task_rank = task_schedule.rank;
     KG_TRACE(10,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
-    //  if (isTargetDataTask(successor))
-    //    continue;
+     if (isTargetDataTask(successor))
+       continue;
     kmp_int32 successor_rank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
     KG_TRACE(10,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
