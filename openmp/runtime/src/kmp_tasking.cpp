@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "kmp.h"
+#include "kmp_debug.h"
 #include "kmp_i18n.h"
 #include "kmp_itt.h"
 #include "kmp_stats.h"
@@ -2083,7 +2084,7 @@ kmp_int32 __kmpc_omp_task_parts(ident_t *loc_ref, kmp_int32 gtid,
 kmp_int32 __kmp_omp_task(kmp_int32 gtid, kmp_task_t *new_task,
                          bool serialize_immediate) {
   kmp_taskdata_t *new_taskdata = KMP_TASK_TO_TASKDATA(new_task);
-
+  KG_TRACE(10, ("__kmp_omp_task(enter): task_id=%d\n", new_taskdata->td_task_id));
 #if OMPX_TASKGRAPH
   if (new_taskdata->is_taskgraph &&
       __kmp_tdg_is_recording(new_taskdata->tdg->tdg_status)) {
@@ -2999,7 +3000,7 @@ void __kmpc_end_taskgroup(ident_t *loc, int gtid) {
   }
 #endif
 
-  KA_TRACE(10, ("__kmpc_end_taskgroup(enter): T#%d loc=%p\n", gtid, loc));
+  KG_TRACE(10, ("__kmpc_end_taskgroup(enter): T#%d loc=%p\n", gtid, loc));
   KMP_DEBUG_ASSERT(taskgroup != NULL);
   KMP_SET_THREAD_STATE_BLOCK(TASKGROUP);
 
@@ -3107,7 +3108,7 @@ void __kmpc_end_taskgroup(ident_t *loc, int gtid) {
   taskdata->td_taskgroup = taskgroup->parent;
   __kmp_thread_free(thread, taskgroup);
 
-  KA_TRACE(10, ("__kmpc_end_taskgroup(exit): T#%d task %p finished waiting\n",
+  KG_TRACE(10, ("__kmpc_end_taskgroup(exit): T#%d task %p finished waiting\n",
                 gtid, taskdata));
 
 #if OMPT_SUPPORT && OMPT_OPTIONAL

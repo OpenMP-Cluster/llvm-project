@@ -1537,7 +1537,7 @@ void __kmpc_omp_taskwait_deps_51(ident_t *loc_ref, kmp_int32 gtid,
                 gtid, loc_ref));
 }
 
-void  __kmpc_remove_task(kmp_node_info_t* task_tdg); //Remove tasks and the related dependencies
+void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the related dependencies
     
   KG_TRACE(30,("__kmpc_remove_task (begin)\n"));
 
@@ -1549,12 +1549,12 @@ void  __kmpc_remove_task(kmp_node_info_t* task_tdg); //Remove tasks and the rela
   kmp_tdg_info_t *tdg = taskdata->tdg;
   
   //Removing the task from the successor list of the predecessor
-  for ( kmp_int32 idx = 0; idx < npredecessors ; idx++) {  
+  for ( kmp_int32 idx = 0; idx < task_tdg->npredecessors ; idx++) {  
     kmp_node_info_t *pred_tdg = &tdg->record_map[idx];
     //Removing for kmp_node_info
     for (kmp_int32 i = 0 ; i < pred_tdg->nsuccessors ; i++) {
-      if ( successors[i] == taskdata->td_tdg_id) {
-	successors[i] = successors[pred_tdg->nsuccessors-1];
+      if ( pred_tdg->successors[i] == taskdata->td_tdg_task_id) {
+	      pred_tdg->successors[i] = pred_tdg->successors[pred_tdg->nsuccessors-1];
         break;
       }
     } 
@@ -1591,12 +1591,12 @@ void  __kmpc_remove_task(kmp_node_info_t* task_tdg); //Remove tasks and the rela
 
   //Removing the successors
   
-  for ( kmp_int32 idx = 0; idx < nsuccessors ; idx++) {  
+  for ( kmp_int32 idx = 0; idx < task_tdg->nsuccessors ; idx++) {  
     kmp_node_info_t *succ_tdg = &tdg->record_map[idx];
     //Removing for kmp_node_info
     for (kmp_int32 i = 0 ; i < succ_tdg->npredecessors ; i++) {
-      if ( predecessors[i] == taskdata->td_tdg_id) {
-	predecessors[i] = predecessors[succ_tdg->npredecessors-1];
+      if ( succ_tdg->predecessors[i] == taskdata->td_tdg_task_id) {
+	      succ_tdg->predecessors[i] = succ_tdg->predecessors[succ_tdg->npredecessors-1];
         break;
       }
     } 
