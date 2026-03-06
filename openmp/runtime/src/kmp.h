@@ -4824,8 +4824,7 @@ void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg);
 kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
 kmp_int32 __kmpc_curr_tdg_idx();
 
-void __kmpc_remove_task(kmp_task_t*, kmp_task_t*);//Remove tasks and the related dependencies
-// void  __kmpc_remove_task(kmp_int32 );
+void  __kmpc_remove_task(kmp_node_info_t*); //Remove tasks and the related dependencies
 
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph);
 #endif

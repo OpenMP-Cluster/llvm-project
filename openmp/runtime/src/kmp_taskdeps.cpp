@@ -1537,48 +1537,72 @@ void __kmpc_omp_taskwait_deps_51(ident_t *loc_ref, kmp_int32 gtid,
                 gtid, loc_ref));
 }
 
-void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
+void  __kmpc_remove_task(kmp_node_info_t* task_tdg); //Remove tasks and the related dependencies
     
   KG_TRACE(30,("__kmpc_remove_task (begin)\n"));
-  //TODO: remove from tdg
+
   kmp_int gtid = __kmp_get_gtid();
   kmp_info_t *thread = __kmp_threads[gtid];
+  kmp_task_t *task = task_tdg->task; 
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_depnode_t *node = taskdata->td_depnode;
+  kmp_tdg_info_t *tdg = taskdata->tdg;
   
   //Removing the task from the successor list of the predecessor
-  // We could use a list of predecessors as input to deal with tasks with multiple dependencies. However, it's not useful with memory tasks
-  
-  kmp_taskdata_t *taskdata_pred = KMP_TASK_TO_TASKDATA(predecessor);
-  kmp_depnode_t *node_pred = taskdata_pred->td_depnode;
+  for ( kmp_int32 idx = 0; idx < npredecessors ; idx++) {  
+    kmp_node_info_t *pred_tdg = &tdg->record_map[idx];
+    //Removing for kmp_node_info
+    for (kmp_int32 i = 0 ; i < pred_tdg->nsuccessors ; i++) {
+      if ( successors[i] == taskdata->td_tdg_id) {
+	successors[i] = successors[pred_tdg->nsuccessors-1];
+        break;
+      }
+    } 
+    pred_tdg->nsuccessors--;
 
-  // Check mutexinoutset dependencies, release locks
-  if (UNLIKELY(node_pred && (node_pred->dn.mtx_num_locks < 0))) {
-    // negative num_locks means all locks were acquired
-    node_pred->dn.mtx_num_locks = -node_pred->dn.mtx_num_locks;
-    for (int i = node_pred->dn.mtx_num_locks - 1; i >= 0; --i) {
-      KMP_DEBUG_ASSERT(node_pred->dn.mtx_locks[i] != NULL);
-      __kmp_release_lock(node_pred->dn.mtx_locks[i], gtid);
+    //Removing for kmp_dep_node
+    kmp_task_t *predecessor = pred_tdg->task;  
+    kmp_taskdata_t *taskdata_pred = KMP_TASK_TO_TASKDATA(predecessor);
+    kmp_depnode_t *node_pred = taskdata_pred->td_depnode;
+
+    // Check mutexinoutset dependencies, release locks
+    if (UNLIKELY(node_pred && (node_pred->dn.mtx_num_locks < 0))) {
+      // negative num_locks means all locks were acquired
+      node_pred->dn.mtx_num_locks = -node_pred->dn.mtx_num_locks;
+      for (int i = node_pred->dn.mtx_num_locks - 1; i >= 0; --i) {
+        KMP_DEBUG_ASSERT(node_pred->dn.mtx_locks[i] != NULL);
+        __kmp_release_lock(node_pred->dn.mtx_locks[i], gtid);
+      }
     }
-  }
   
-  kmp_depnode_list_t* pred_successors = node_pred->dn.successors;
-  kmp_depnode_list_t* pred_successors_next = node_pred->dn.successors->next;
+    kmp_depnode_list_t* pred_successors = node_pred->dn.successors;
+    kmp_depnode_list_t* pred_successors_next = node_pred->dn.successors->next;
 
-  while ( pred_successors_next->next != nullptr && pred_successors_next->node->dn.task != task) {
-    pred_successors = pred_successors_next;
-    pred_successors_next = pred_successors->next;
-  }
+    while ( pred_successors_next->next != nullptr && pred_successors_next->node->dn.task != task) {
+      pred_successors = pred_successors_next;
+      pred_successors_next = pred_successors->next;
+    }
 
-  if (pred_successors_next != nullptr) {
-    //Simply remove the link containing the task
-    pred_successors->next = pred_successors_next->next;
-  } 
-  else {
-    KG_TRACE(30,("__kmpc_remove_task : Given predecessor is not a predecessor of the task\n"));
-  }
+    if (pred_successors_next != nullptr) {
+      //Simply remove the link containing the task
+      pred_successors->next = pred_successors_next->next;
+    } 
+  }  
 
   //Removing the successors
+  
+  for ( kmp_int32 idx = 0; idx < nsuccessors ; idx++) {  
+    kmp_node_info_t *succ_tdg = &tdg->record_map[idx];
+    //Removing for kmp_node_info
+    for (kmp_int32 i = 0 ; i < succ_tdg->npredecessors ; i++) {
+      if ( predecessors[i] == taskdata->td_tdg_id) {
+	predecessors[i] = predecessors[succ_tdg->npredecessors-1];
+        break;
+      }
+    } 
+    succ_tdg->npredecessors--;
+    KMP_ATOMIC_DEC(&succ_tdg->npredecessors_counter);
+  }
   // Check mutexinoutset dependencies, release locks
   if (UNLIKELY(node && (node->dn.mtx_num_locks < 0))) {
     // negative num_locks means all locks were acquired
@@ -1588,26 +1612,23 @@ void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
       __kmp_release_lock(node->dn.mtx_locks[i], gtid);
     }
   }
-
   if (taskdata->td_dephash) {
-     __kmp_dephash_free(thread, taskdata->td_dephash);
+    __kmp_dephash_free(thread, taskdata->td_dephash);
     taskdata->td_dephash = NULL;
   }
 
   if (!node)
     return;
-
   KMP_ACQUIRE_DEPNODE(gtid, node);
 
-  node->dn.task =
-        NULL; // mark this task as finished, so no new dependencies are generated
+  node->dn.task = NULL; // mark this task as finished, so no new dependencies are generated
   KMP_RELEASE_DEPNODE(gtid, node);
 
   kmp_depnode_list_t *next;
   for (kmp_depnode_list_t *p = node->dn.successors; p; p = next) {
     kmp_depnode_t *successor = p->node;
     KMP_ATOMIC_DEC(&successor->dn.npredecessors);
-    //We don't want to launch the successor if npredecessors=0, we let the taskgraph do it
+    //We might want to launch the task if npredecessors == 0 but it won't happen hen removing memory tasks
     next = p->next;
     __kmp_node_deref(thread, p->node);
 #if USE_FAST_MEMORY
@@ -1617,7 +1638,7 @@ void __kmpc_remove_task(kmp_task_t *task , kmp_task_t *predecessor){
 #endif
   }
   __kmp_node_deref(thread, node);
-
+  
 #if USE_FAST_MEMORY
   __kmp_fast_free(thread, task);
   __kmp_fast_free(thread, taskdata);

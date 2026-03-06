@@ -402,17 +402,10 @@ void BaseScheduler::resetTasksRank(){
 
 void BaseScheduler::resetMemoryTasks(){
   KG_TRACE(10,("resetMemoryTasks start\n"));
-  //TODO: iterate on MT at the end of record map
-  for (auto& [pred,task] : tdg->scheduling_info->memory_tasks){
-    __kmpc_remove_task(task,pred);
+  for ( kmp_int32 tdg_task_id = tdg->scheduling_info->num_normal_tasks ; tdg_task_id < tdg->num_tasks ; tdg_task_id++ ) {
+    __kmpc_remove_task(&tdg->record_map[tdg_task_id]);
   }
-  /*
-   for ( kmp_int32 tdg_task_id = tdg->scheduling_info->num_normal_tasks ; tdg_task_id < tdg->num_tasks ; tdg_task_id++ ) {
-     __kmpc_remove_task(tdg_task_id);
-   }
-   */
   tdg->num_tasks.store(tdg->scheduling_info->num_normal_tasks.load());
-  //reset task id counter
   KG_TRACE(10,("resetMemoryTasks end\n"));
 }
 
