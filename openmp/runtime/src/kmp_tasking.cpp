@@ -5825,7 +5825,6 @@ void __kmp_end_record(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   if (__kmp_tdg_dot)
     __kmp_print_tdg_dot(tdg, gtid);
 
-  __kmpc_scheduleGraph(tdg);
 }
 
 // __kmpc_end_record_task: wrapper around __kmp_end_record to mark
@@ -5843,6 +5842,7 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
                 " tdg=%d with flags=%d\n",
                 gtid, loc_ref, tdg_id, input_flags));
   if (__kmp_max_tdgs) {
+    __kmpc_scheduleGraph(tdg);
     // TODO: use input_flags->nowait
     if (__kmp_tdg_is_recording(tdg->tdg_status))
       __kmp_end_record(gtid, tdg);

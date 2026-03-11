@@ -291,9 +291,6 @@ public:
   /// Destructor.
   ~HEFTScheduler() {}
 
-public:
-  std::unordered_map<kmp_int32, std::set<int>> dataTaskSuccessorRanks;
-
 private:
   /// Run HEFT scheduling algorithm.
   void scheduleGraph() override;

@@ -686,25 +686,35 @@ void HEFTScheduler::scheduleGraph() {
 
     double MaxCost = 0.0;
     kmp_int32 Rank = 1;
+    
+    //We want the dataTask on the same device as its predecessor or successor (depending if it's an exit or enter data map)
+    if ( Task->npredecessors == 0){
+      // Find the successor with highest communication cost
+      for (kmp_int32 idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
+        auto Succ = &(tdg->record_map[Task->successors[idx_succ]]);
+        auto SuccRank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
 
-    // Find the successor with highest communication cost
-    // NOTE: Exit target data tasks are temporary scheduled but the rank will
-    // be overwritten later with PinTask function.
-
-    for (kmp_int32 idx_succ = 0 ; idx_succ < Task->nsuccessors ; idx_succ++) {
-      auto Succ = &(tdg->record_map[Task->successors[idx_succ]]);
-      auto SuccRank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
-      // Save successor ranks of each scheduled data task to detect broadcast
-      // opportunities
-      dataTaskSuccessorRanks[KMP_TASKPTR_TO_TASKID(Task)].insert(SuccRank);
-
-      if (Ctx.CommunicationCost[Task][Succ] > MaxCost &&
-          !isClassicalTask(Succ) && SuccRank != -1) {
-        MaxCost = Ctx.CommunicationCost[Task][Succ];
-        Rank = SuccRank;
+        if (Ctx.CommunicationCost[Task][Succ] > MaxCost &&
+            !isClassicalTask(Succ) && SuccRank != -1) {
+          MaxCost = Ctx.CommunicationCost[Task][Succ];
+          Rank = SuccRank;
+        }
       }
     }
+    else {
+      // Find the predecessor with highest communication cost
+      for (kmp_int32 idx_pred = 0 ; idx_pred < Task->npredecessors ; idx_pred++) {
+        auto Pred = &(tdg->record_map[Task->predecessors[idx_pred]]);
+        auto PredRank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Pred)].rank;
 
+        if (Ctx.CommunicationCost[Pred][Task] > MaxCost &&
+            !isClassicalTask(Pred) && PredRank != -1) {
+          MaxCost = Ctx.CommunicationCost[Pred][Task];
+          Rank = PredRank;
+        }
+      }
+    }
+        
     // Schedule this task to the same rank as the successor chosen before
     Ctx.forceScheduleTask(Task, DeviceId(Rank));
   }
