@@ -679,13 +679,13 @@ static void __kmp_task_start(kmp_int32 gtid, kmp_task_t *task,
            ("__kmp_task_start(enter): T#%d starting task %d: current_task=%p ; onced : %d; device: %d\n",
             gtid, taskdata->td_task_id, current_task,  taskdata->td_flags.onced, __kmpc_get_task_device(taskdata->td_task_id)));
 
-  for ( auto [pred, memotask] : taskdata->tdg->scheduling_info->memory_tasks) {
-  	if ( memotask == task) {
-	  KG_TRACE(10,
-           ("__kmp_task_start(enter): T#%d starting task %d: isMemoryTask (pred: %d)\n",
-            gtid, taskdata->td_task_id, KMP_TASK_TO_TASKDATA(pred)->td_task_id));
-	}
-  }
+  // for ( auto [pred, memotask] : taskdata->tdg->scheduling_info->memory_tasks) {
+  // 	if ( memotask == task) {
+	//   KG_TRACE(10,
+  //          ("__kmp_task_start(enter): T#%d starting task %d: isMemoryTask (pred: %d)\n",
+  //           gtid, taskdata->td_task_id, KMP_TASK_TO_TASKDATA(pred)->td_task_id));
+	// }
+  // }
 
   KMP_DEBUG_ASSERT(taskdata->td_flags.tasktype == TASK_EXPLICIT);
 
@@ -1080,7 +1080,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   is_taskgraph = taskdata->is_taskgraph;
   if (is_taskgraph){
     __kmp_add_task_time(gtid, taskdata);
-      KG_TRACE(10,("[Inter HEFT] __kmp_add_task_time (after):subsequent profile gtid %d, task %d,device %d,iteration %d \n",gtid,taskdata->td_task_id,__kmpc_get_task_device(taskdata->td_task_id),taskdata->tdg->record_map[taskdata->td_tdg_task_id].task_time[__kmpc_get_task_device(taskdata->td_task_id)].iteration_number));
+      // KG_TRACE(10,("[Inter HEFT] __kmp_add_task_time (after):subsequent profile gtid %d, task %d,device %d,iteration %d \n",gtid,taskdata->td_task_id,__kmpc_get_task_device(taskdata->td_task_id),taskdata->tdg->record_map[taskdata->td_tdg_task_id].task_time[__kmpc_get_task_device(taskdata->td_task_id)].iteration_number));
   }
 #endif
 
@@ -5608,7 +5608,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
                 tdg->tdg_id, tdg->num_roots));
   kmp_node_info_t *this_record_map = tdg->record_map;
   kmp_int32 *this_root_tasks = tdg->root_tasks;
-  std::vector<kmp_task_and_pred> this_memory_tasks = tdg->scheduling_info->memory_tasks;
+  // std::vector<kmp_task_and_pred> this_memory_tasks = tdg->scheduling_info->memory_tasks;
   kmp_int32 this_num_roots = tdg->num_roots;
   kmp_int32 this_num_tasks = KMP_ATOMIC_LD_RLX(&tdg->num_tasks);
 
@@ -5653,27 +5653,27 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
       KMP_ATOMIC_INC(&this_record_map[j].parent_task->td_allocated_child_tasks);
   }
   
-  for (kmp_task_and_pred tp : this_memory_tasks) {
-    kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(tp.task);
+  // for (kmp_task_and_pred tp : this_memory_tasks) {
+  //   kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(tp.task);
 
-    td->td_parent = parent_task;
+  //   td->td_parent = parent_task;
     
-    kmp_taskgroup_t *parent_taskgroup =
-        parent_task->td_taskgroup;
+  //   kmp_taskgroup_t *parent_taskgroup =
+  //       parent_task->td_taskgroup;
 
-    KMP_ATOMIC_INC(&parent_task->td_incomplete_child_tasks);
+  //   KMP_ATOMIC_INC(&parent_task->td_incomplete_child_tasks);
 
-    if (parent_taskgroup) {
-      KMP_ATOMIC_INC(&parent_taskgroup->count);
-      // The taskgroup is different so we must update it
-      td->td_taskgroup = parent_taskgroup;
-    } else if (td->td_taskgroup != nullptr) {
-      // If the parent doesnt have a taskgroup, remove it from the task
-      td->td_taskgroup = nullptr;
-    }
-    if (parent_task->td_flags.tasktype == TASK_EXPLICIT)
-      KMP_ATOMIC_INC(&parent_task->td_allocated_child_tasks);
-  }
+  //   if (parent_taskgroup) {
+  //     KMP_ATOMIC_INC(&parent_taskgroup->count);
+  //     // The taskgroup is different so we must update it
+  //     td->td_taskgroup = parent_taskgroup;
+  //   } else if (td->td_taskgroup != nullptr) {
+  //     // If the parent doesnt have a taskgroup, remove it from the task
+  //     td->td_taskgroup = nullptr;
+  //   }
+  //   if (parent_task->td_flags.tasktype == TASK_EXPLICIT)
+  //     KMP_ATOMIC_INC(&parent_task->td_allocated_child_tasks);
+  // }
 
   for( auto [id,task]: tdg->scheduling_info->schedule_map) {
     KH_TRACE(10, ("[exec_tdg:] Task %d scheduled on rank %d\n", id, task.rank));
@@ -5707,6 +5707,23 @@ static inline void __kmp_start_record(kmp_int32 gtid,
   tdg->rec_num_taskred = 0;
   tdg->rec_taskred_data = nullptr;
   tdg->scheduling_info = new kmp_tdg_scheduling();
+  // tdg->scheduling_info = (kmp_tdg_scheduling*) __kmp_allocate(sizeof(kmp_tdg_scheduling));
+  // KH_TRACE(10,
+  //          ("__kmp_start_record(enter): tdg->scheduling_info->schedule_map=%p\n",
+  //           &tdg->scheduling_info->schedule_map));
+
+  // tdg->scheduling_info->schedule_map[0] = {
+  //     .state = TaskState::SCHEDULED,
+  //     .rank = 1,
+  //     .thread = 1,
+  //     .translated_rank = -1,
+  //     .task = nullptr,
+  // };
+
+  // KH_TRACE(10,
+  //         ("__kmp_start_record(enter): tdg->scheduling_info->schedule_map.count(0)=%d\n",
+  //         tdg->scheduling_info->schedule_map.count(0)));
+
   KMP_ATOMIC_ST_RLX(&tdg->num_tasks, 0);
 
   // Initializing the list of nodes in this TDG
@@ -5841,13 +5858,17 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
   KG_TRACE(10, ("__kmpc_end_record_task(enter): T#%d loc=%p finishes recording"
                 " tdg=%d with flags=%d\n",
                 gtid, loc_ref, tdg_id, input_flags));
+
   if (__kmp_max_tdgs) {
-    __kmpc_scheduleGraph(tdg);
     // TODO: use input_flags->nowait
-    if (__kmp_tdg_is_recording(tdg->tdg_status))
-      __kmp_end_record(gtid, tdg);
+    if (__kmp_tdg_is_recording(tdg->tdg_status)) {
+      __kmpc_scheduleGraph(tdg);
     }
     __kmpc_end_taskgroup(loc_ref, gtid);
+    if (__kmp_tdg_is_recording(tdg->tdg_status)) {
+      __kmp_end_record(gtid, tdg);
+    }
+  }
 
   KG_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
                 " tdg=%d, its status is now READY\n",
@@ -5861,4 +5882,16 @@ kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id){
 kmp_int32 __kmpc_curr_tdg_idx(){
   return __kmp_curr_tdg_idx;
 }
+
+void __kmpc_free_schedule_maps() {
+  // delete __kmp_global_tdgs[0]->scheduling_info->schedule_map;
+  delete __kmp_global_tdgs[0]->scheduling_info;
+  // for (int i = 0; i <= __kmp_curr_tdg_idx; i++) {
+  //   if (__kmp_global_tdgs[i] != nullptr && __kmp_global_tdgs[i]->scheduling_info != nullptr)
+  //     delete __kmp_global_tdgs[i]->scheduling_info->schedule_map;
+  //     delete __kmp_global_tdgs[i]->scheduling_info;
+  // }
+}
+
+
 #endif

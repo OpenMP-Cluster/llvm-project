@@ -2731,7 +2731,7 @@ struct kmp_task_and_pred {
 
 struct kmp_tdg_scheduling {
   ScheduleMap schedule_map;
-  std::vector<kmp_task_and_pred> memory_tasks;
+  // std::vector<kmp_task_and_pred> memory_tasks;
   bool is_launching_memory_tasks = false;
   std::atomic<kmp_int32> num_normal_tasks; // Number of TDG nodes
 };
@@ -4823,6 +4823,8 @@ void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg);
 
 kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
 kmp_int32 __kmpc_curr_tdg_idx();
+
+void __kmpc_free_schedule_maps();
 
 void  __kmpc_remove_task(kmp_node_info_t*); //Remove tasks and the related dependencies
 
