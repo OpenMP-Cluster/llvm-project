@@ -2731,9 +2731,6 @@ struct kmp_task_and_pred {
 
 struct kmp_tdg_scheduling {
   ScheduleMap schedule_map;
-  // std::vector<kmp_task_and_pred> memory_tasks;
-  bool is_launching_memory_tasks = false;
-  std::atomic<kmp_int32> num_normal_tasks; // Number of TDG nodes
 };
 
 /// Structure that contains a TDG
@@ -2755,6 +2752,7 @@ typedef struct kmp_tdg_info {
                           // __kmpc_taskred_init
   kmp_int32 rec_num_taskred;
   bool is_scheduled = false;	
+  std::atomic<kmp_int32> num_normal_tasks; // Number of TDG nodes without memory tasks
   kmp_tdg_scheduling* scheduling_info;
 } kmp_tdg_info_t;
 

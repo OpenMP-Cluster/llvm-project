@@ -309,10 +309,10 @@ kmp_target_dep BaseScheduler::getDep(kmp_int32 task_id, kmp_int64 addr) {
 }
 
 void BaseScheduler::addMemoryTasks(){
-  tdg->scheduling_info->is_launching_memory_tasks = true; //We don't want to record memory tasks
+
   kmp_int32 gtid = __kmp_get_gtid();
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
-  tdg->scheduling_info->num_normal_tasks.store(tdg->num_tasks.load());
+  tdg->num_normal_tasks.store(tdg->num_tasks.load());
   KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, tdg->num_tasks.load());
   for (auto &map_entry : tdg->scheduling_info->schedule_map) {
     TaskScheduleData &task_schedule = map_entry.second;
@@ -351,7 +351,7 @@ void BaseScheduler::addMemoryTasks(){
   }
 
   KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, 0);
-  tdg->scheduling_info->is_launching_memory_tasks = false; //We don't want to record memory tasks
+
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
 }
 
@@ -402,10 +402,10 @@ void BaseScheduler::resetTasksRank(){
 
 void BaseScheduler::resetMemoryTasks(){
   KG_TRACE(10,("resetMemoryTasks start\n"));
-  for ( kmp_int32 tdg_task_id = tdg->scheduling_info->num_normal_tasks ; tdg_task_id < tdg->num_tasks ; tdg_task_id++ ) {
+  for ( kmp_int32 tdg_task_id = tdg->num_normal_tasks ; tdg_task_id < tdg->num_tasks ; tdg_task_id++ ) {
     __kmpc_remove_task(&tdg->record_map[tdg_task_id]);
   }
-  tdg->num_tasks.store(tdg->scheduling_info->num_normal_tasks.load());
+  tdg->num_tasks.store(tdg->num_normal_tasks.load());
   KG_TRACE(10,("resetMemoryTasks end\n"));
 }
 
