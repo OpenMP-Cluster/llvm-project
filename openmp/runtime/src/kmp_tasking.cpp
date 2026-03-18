@@ -5675,7 +5675,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   //     KMP_ATOMIC_INC(&parent_task->td_allocated_child_tasks);
   // }
 
-  for( auto [id,task]: get_schedule_map(tdg->tdg_id)) {
+  for( auto [id,task]: (*get_schedule_map(tdg->tdg_id))) {
     KH_TRACE(10, ("[exec_tdg:] Task %d scheduled on rank %d\n", id, task.rank));
   }
 
@@ -5864,16 +5864,6 @@ kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id){
 
 kmp_int32 __kmpc_curr_tdg_idx(){
   return __kmp_curr_tdg_idx;
-}
-
-void __kmpc_free_schedule_maps() {
-  // delete __kmp_global_tdgs[0]->scheduling_info->schedule_map;
-  //delete __kmp_global_tdgs[0]->scheduling_info;
-  // for (int i = 0; i <= __kmp_curr_tdg_idx; i++) {
-  //   if (__kmp_global_tdgs[i] != nullptr && __kmp_global_tdgs[i]->scheduling_info != nullptr)
-  //     delete __kmp_global_tdgs[i]->scheduling_info->schedule_map;
-  //     delete __kmp_global_tdgs[i]->scheduling_info;
-  // }
 }
 
 

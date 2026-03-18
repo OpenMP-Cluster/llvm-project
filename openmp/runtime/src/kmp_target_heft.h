@@ -160,8 +160,8 @@ public:
   /// \param task the task
   inline bool isDeferredTask(const kmp_node_info &Task) const {
     bool failed = isTargetDataTask(Task) &&
-                  get_schedule_map(tdg->tdg_id)[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::FAILED;
-    return get_schedule_map(tdg->tdg_id)[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::DEFERRED || failed;
+                  (*get_schedule_map(tdg->tdg_id))[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::FAILED;
+    return (*get_schedule_map(tdg->tdg_id))[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::DEFERRED || failed;
   }
 
   /// Build a priority queue from the upward rank map.

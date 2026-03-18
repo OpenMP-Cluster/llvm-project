@@ -33,8 +33,10 @@ static const char *allowed_schedulers[] = {
 // Scheduler global state
 static BaseScheduler *scheduler;
 
+
 // Schedule Map for each tdg
-static std::unordered_map<kmp_int32,*ScheduleMap> *schedule_map_list;
+
+static std::unordered_map<kmp_int32, ScheduleMap*> *schedule_map_list;
 
 // The default scheduler used by the MPI plugin
 using DefaultScheduler = HEFTScheduler;
@@ -66,7 +68,7 @@ void __kmpc_InitScheduler() {
     return;
   }
    
-  schedule_map_list = new std::unordered_map<kmp_int32,ScheduleMap>();
+  schedule_map_list = new std::unordered_map<kmp_int32, ScheduleMap*>();
 
   const char *str = std::getenv("OMPCLUSTER_SCHEDULER");
   std::string sched_str = (str != nullptr) ? str : "";
@@ -239,13 +241,22 @@ void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg){
 }
 
 ScheduleMap* get_schedule_map(int tdg_id) {
- KG_TRACE(90,("get_schedule_map (enter) tdg_id : %d\n",tdg_id));
+ KG_TRACE(90,("*get_schedule_map (enter) tdg_id : %d\n",tdg_id));
   if (scheduler == nullptr) {
     __kmpc_InitScheduler();
   } 
-  if (!schedule_map_list.count(tdg_id) {
-    schedule_map_list[tdg_id] = new ScheduleMap();
+  if (!schedule_map_list->count(tdg_id)) {
+    (*schedule_map_list)[tdg_id] = new ScheduleMap();
   }
-  KG_TRACE(90,("get_schedule_map (exit) schedule_map address:  : %p\n", gchedule_map_list[tdg_id]));
-  return schedule_map_list[tdg_id];
-}	
+  KG_TRACE(90,("get_schedule_map (exit) schedule_map address:  : %p\n", schedule_map_list->at(tdg_id)));
+  return  (*schedule_map_list)[tdg_id];
+}
+
+void __kmpc_free_schedule_maps() {
+  // delete __kmp_global_tdgs[0]->scheduling_info->schedule_map;
+  //delete __kmp_global_tdgs[0]->scheduling_info;
+  // for (auto S: *schedule_map_list) {
+  //   delete S.second;
+  // }
+  // delete schedule_map_list;
+}
