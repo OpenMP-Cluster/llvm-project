@@ -2721,18 +2721,6 @@ struct TaskScheduleData {
   std::string source_location;
 };
 
-// Maps a task ID to its associated schedule data
-using ScheduleMap = std::unordered_map<int32_t, TaskScheduleData>;
-
-struct kmp_task_and_pred {
-  kmp_task_t * pred;
-  kmp_task_t * task;
-};
-
-struct kmp_tdg_scheduling {
-  ScheduleMap schedule_map;
-};
-
 /// Structure that contains a TDG
 typedef struct kmp_tdg_info {
   kmp_int32 tdg_id; // Unique idenfifier of the TDG
@@ -2753,7 +2741,6 @@ typedef struct kmp_tdg_info {
   kmp_int32 rec_num_taskred;
   bool is_scheduled = false;	
   std::atomic<kmp_int32> num_normal_tasks; // Number of TDG nodes without memory tasks
-  kmp_tdg_scheduling* scheduling_info;
 } kmp_tdg_info_t;
 
 extern int __kmp_tdg_dot;
@@ -4815,6 +4802,11 @@ bool __kmpc_is_rescheduling();
 void __kmpc_reset_scheduler_barrier();
 void __kmpc_scheduler_update_weights();
 void __kmpc_allow_exec();
+
+// Maps a task ID to its associated schedule data
+using ScheduleMap = std::unordered_map<kmp_int32, TaskScheduleData>;
+
+ScheduleMap* get_schedule_map(int tdg_id);
 
 //Helpers
 void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg);

@@ -91,7 +91,7 @@ void BaseScheduler::acquireNewGraph(kmp_tdg_info_t* new_tdg) {
       return;
     }
     isScheduleDone = 0;
-    tdg->scheduling_info->schedule_map.clear(); // TODO Do we really want to clear this structure?  Can it be shared between tdgs?
+    get_schedule_map(tdg->tdg_id).clear(); // TODO Do we really want to clear this structure?  Can it be shared between tdgs?
 
     if (remaining_target_tasks != 0) {
       KG_TRACE(10,("Warning: some target-tasks were discarded in favor of a new "
@@ -109,9 +109,9 @@ void BaseScheduler::acquireNewGraph(kmp_tdg_info_t* new_tdg) {
     const kmp_node_info &task = tdg->record_map[idx];
     if (task.is_target_task) {
       // Add new target-tasks to the schedule map
-      assertm(tdg->scheduling_info->schedule_map.count(KMP_TASKNODE_TO_TASKID(task)) == 0,
+      assertm(get_schedule_map(tdg->tdg_id).count(KMP_TASKNODE_TO_TASKID(task)) == 0,
               "New tasks should not be already present in the schedule map.");
-      tdg->scheduling_info->schedule_map[KMP_TASKNODE_TO_TASKID(task)] = {TaskState::CREATED, -1, -1, -1, &task};
+      get_schedule_map(tdg->tdg_id)[KMP_TASKNODE_TO_TASKID(task)] = {TaskState::CREATED, -1, -1, -1, &task};
       remaining_target_tasks++;
       // Correct size of globally mapped variables
       if (isTargetDataTask(task)) {
@@ -175,7 +175,7 @@ kmp_int32 BaseScheduler::scheduleTask(kmp_int32 task_id) {
     }
   } else {
 
-    if (tdg->scheduling_info->schedule_map.count(task_id) == 0) {
+    if (get_schedule_map(tdg->tdg_id).count(task_id) == 0) {
       //If the task was not scheduled (serialization), map to the first device or user-specified device
       scheduled_id = 0 ;
       KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, task not scheduled : rank = %d\n",task_id,scheduled_id));
@@ -184,10 +184,10 @@ kmp_int32 BaseScheduler::scheduleTask(kmp_int32 task_id) {
     	// graph based scheduling algorithm.
 	
 
-	assert(tdg->scheduling_info->schedule_map.count(task_id) == 1);
+	assert(get_schedule_map(tdg->tdg_id).count(task_id) == 1);
 
 	preScheduleTask(task_id, active_devices_number);
-    	const TaskScheduleData &task_schedule = tdg->scheduling_info->schedule_map[task_id];
+    	const TaskScheduleData &task_schedule = get_schedule_map(tdg->tdg_id)[task_id];
     	
         KG_TRACE(50,("[SCHEDULER] scheduleTask : task_id: %d, using scheduler : rank = %d, schedule state: %d \n",task_id, task_schedule.rank, task_schedule.state));
 	assert(task_schedule.rank != -1);
@@ -207,15 +207,15 @@ kmp_int32 BaseScheduler::get_scheduleTask(kmp_int32 task_id){
   KG_TRACE(50,("[SCHEDULER] get_scheduleTask: task_id: %d\n",task_id));
   assert(tdg != nullptr);
 
-  if(task_id == -1 || !tdg->scheduling_info->schedule_map.count(task_id))
+  if(task_id == -1 || !get_schedule_map(tdg->tdg_id).count(task_id))
     return 0;
-  return tdg->scheduling_info->schedule_map[task_id].rank - 1;
+  return get_schedule_map(tdg->tdg_id)[task_id].rank - 1;
 }
 
 void BaseScheduler::pinTask(kmp_int32 task_id, kmp_int32 DeviceId) {
   KG_TRACE(50,("[SCHEDULER] pinTask: task_id %d; device: %d\n",task_id,DeviceId));
   if (task_id != -1) {
-    TaskScheduleData &task_schedule = tdg->scheduling_info->schedule_map[task_id];
+    TaskScheduleData &task_schedule = get_schedule_map(tdg->tdg_id)[task_id];
     task_schedule.rank = DeviceId + 1;
   }
 }
@@ -224,12 +224,12 @@ void BaseScheduler::setTaskState(kmp_int32 task_id, TaskState new_state) {
 
   KG_TRACE(50,("[SCHEDULER] setTaskState: task_id %d;\n",task_id));
   //assert(tdg != nullptr);
-  if(tdg->scheduling_info->schedule_map.count(task_id) !=1)
+  if(get_schedule_map(tdg->tdg_id).count(task_id) !=1)
  	KG_TRACE(10,("Task state fail: task %d. Initial task: %d\n",task_id,tdg->initial_task_id));
-  assert(tdg->scheduling_info->schedule_map.count(task_id) == 1);
+  assert(get_schedule_map(tdg->tdg_id).count(task_id) == 1);
  //assert(new_state >= TaskState::DISPATCHED);
 
-  TaskScheduleData &task_schedule = tdg->scheduling_info->schedule_map[task_id];
+  TaskScheduleData &task_schedule = get_schedule_map(tdg->tdg_id)[task_id];
   // If the current task state is FAILED, it means that the counter was already
   // decremented for this task, so we increment again to make the values
   // consistent
@@ -241,7 +241,7 @@ void BaseScheduler::setTaskState(kmp_int32 task_id, TaskState new_state) {
   }
 
   task_schedule.state = new_state;
-  if (tdg->scheduling_info->schedule_map.count(task_id) == 1 && new_state == TaskState::EXECUTED) {
+  if (get_schedule_map(tdg->tdg_id).count(task_id) == 1 && new_state == TaskState::EXECUTED) {
     remaining_target_tasks--;
     KMP_DEBUG_ASSERT(remaining_target_tasks >= 0)
    }
@@ -254,7 +254,7 @@ void BaseScheduler::setTaskState(kmp_int32 task_id, kmp_int32 device_id,
   // and the new state is EXECUTED, because this is the case where the graph was
   // just re-scheduled and we will ignore this state transition
   KG_TRACE(50,("[SCHEDULER] setTaskState: task_id %d; device: %d\n",task_id,device_id));
-  if (tdg->scheduling_info->schedule_map[task_id].state == TaskState::FAILED &&
+  if (get_schedule_map(tdg->tdg_id)[task_id].state == TaskState::FAILED &&
       new_state == TaskState::EXECUTED) {
     remaining_target_tasks--;
     return;
@@ -276,15 +276,15 @@ void BaseScheduler::setTaskState(kmp_int32 task_id, kmp_int32 device_id,
 TaskScheduleData BaseScheduler::getTask(kmp_int32 task_id) {
   KG_TRACE(50,("[SCHEDULER] getTask: task_id %d\n",task_id));
   if (task_id != -1) {
-    if (tdg->scheduling_info->schedule_map.count(task_id) == 0) {
+    if (get_schedule_map(tdg->tdg_id).count(task_id) == 0) {
       return TaskScheduleData{.state = TaskState::UNDEFINED,
                               .rank = -1,
                               .translated_rank = -1,
                               .task = nullptr};
     }
-    assert(tdg->scheduling_info->schedule_map.count(task_id) == 1);
+    assert(get_schedule_map(tdg->tdg_id).count(task_id) == 1);
 
-    return tdg->scheduling_info->schedule_map[task_id];
+    return get_schedule_map(tdg->tdg_id)[task_id];
   }
 
   return TaskScheduleData{.state = TaskState::UNDEFINED,
@@ -314,7 +314,7 @@ void BaseScheduler::addMemoryTasks(){
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
   tdg->num_normal_tasks.store(tdg->num_tasks.load());
   KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, tdg->num_tasks.load());
-  for (auto &map_entry : tdg->scheduling_info->schedule_map) {
+  for (auto &map_entry : get_schedule_map(tdg->tdg_id)) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
     if (isTargetDataTask(task))
@@ -325,7 +325,7 @@ void BaseScheduler::addMemoryTasks(){
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
      if (isTargetDataTask(successor))
        continue;
-    kmp_int32 successor_rank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(successor)].rank;
+    kmp_int32 successor_rank = get_schedule_map(tdg->tdg_id)[KMP_TASKPTR_TO_TASKID(successor)].rank;
     KG_TRACE(10,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
@@ -383,7 +383,7 @@ bool BaseScheduler::isSchedulingThread(kmp_int32 gtid){
 
 void BaseScheduler::resetTasksState(){
   KG_TRACE(10,("resetTasksState start\n"));
-  for ( auto task : tdg->scheduling_info->schedule_map){
+  for ( auto task : get_schedule_map(tdg->tdg_id)){
     KG_TRACE(10,("resetTasksState task %d\n",task.first));
     setTaskState(task.first, TaskState::SCHEDULED ); 
     remaining_target_tasks++;
@@ -393,7 +393,7 @@ void BaseScheduler::resetTasksState(){
 
 void BaseScheduler::resetTasksRank(){
   KG_TRACE(10,("resetTasksRank start\n"));
-  for ( auto& task : tdg->scheduling_info->schedule_map){
+  for ( auto& task : get_schedule_map(tdg->tdg_id)){
     task.second.rank = -1;
     task.second.translated_rank = -1;
   }
@@ -416,7 +416,7 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
   kmp_int32 task_counter = 0;
 
   kmp_int32 NumDevices = __kmpc_get_num_devices();
-  for (auto &map_entry : tdg->scheduling_info->schedule_map) {
+  for (auto &map_entry : get_schedule_map(tdg->tdg_id)) {
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;
 
@@ -434,7 +434,7 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
  }
 
   // Schedule deferred tasks
-  for (auto &map_entry : tdg->scheduling_info->schedule_map) {
+  for (auto &map_entry : get_schedule_map(tdg->tdg_id)) {
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;
 
@@ -450,7 +450,7 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
 
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       auto Succ = &(tdg->record_map[task->successors[idx_succ]]);
-      auto SuccRank = tdg->scheduling_info->schedule_map[KMP_TASKPTR_TO_TASKID(Succ)].rank;
+      auto SuccRank = get_schedule_map(tdg->tdg_id)[KMP_TASKPTR_TO_TASKID(Succ)].rank;
 
       if (!isClassicalTask(Succ) && SuccRank != -1) {
         Rank = SuccRank;
@@ -466,7 +466,7 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
   KG_TRACE(10,("[SCHEDULER]: ScheduleGraphRR (adding memory tasks)\n"));
   addMemoryTasks();
 
-  assert(std::none_of(tdg->scheduling_info->schedule_map.begin(), tdg->scheduling_info->schedule_map.end(),
+  assert(std::none_of(get_schedule_map(tdg->tdg_id).begin(), get_schedule_map(tdg->tdg_id).end(),
                       [](const auto &entry) {
                         return entry.second.state < TaskState::SCHEDULED;
                       }));
@@ -499,8 +499,8 @@ void BaseScheduler::dumpTaskGraph() {
 
   for (kmp_int32 tid = 0 ; tid < tdg->num_tasks ; tid ++ ) {
     auto task = &(tdg->record_map[tid]);
-    kmp_int32 trank = tdg->scheduling_info->schedule_map[tid].rank;
-    std::string tinfo = tdg->scheduling_info->schedule_map[tid].source_location;
+    kmp_int32 trank = get_schedule_map(tdg->tdg_id)[tid].rank;
+    std::string tinfo = get_schedule_map(tdg->tdg_id)[tid].source_location;
 
     int task_id = KMP_TASKPTR_TO_TASKID(task);
     printf("TASKID=%d\n", task_id);
@@ -508,7 +508,7 @@ void BaseScheduler::dumpTaskGraph() {
     // Print graph node 
     dot << "  V" << task_id << " [label=<<B>ID " << task_id
         << "</B><BR /><FONT POINT-SIZE=\"10\">Rank " << trank
-        << ((tdg->scheduling_info->schedule_map[tid].state == TaskState::SAVED) ? "<BR />Saved\""
+        << ((get_schedule_map(tdg->tdg_id)[tid].state == TaskState::SAVED) ? "<BR />Saved\""
                                                           : "<BR />Unsaved\"");
 
     if (!tinfo.empty()) {
@@ -526,7 +526,7 @@ void BaseScheduler::dumpTaskGraph() {
 
     for (kmp_int32 idx = 0 ; idx < task->nsuccessors ; idx++) {
       kmp_int32 sid = task->successors[idx];
-      kmp_int32 srank = tdg->scheduling_info->schedule_map[sid].rank;
+      kmp_int32 srank = get_schedule_map(tdg->tdg_id)[sid].rank;
       const auto *color = detail::getEdgeColor(trank, srank);
       // Print graph edge
       dot << "  V" << tid << " -> V" << sid << " [color=\"" << color

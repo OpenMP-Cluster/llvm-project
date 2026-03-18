@@ -5675,7 +5675,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   //     KMP_ATOMIC_INC(&parent_task->td_allocated_child_tasks);
   // }
 
-  for( auto [id,task]: tdg->scheduling_info->schedule_map) {
+  for( auto [id,task]: get_schedule_map(tdg->tdg_id)) {
     KH_TRACE(10, ("[exec_tdg:] Task %d scheduled on rank %d\n", id, task.rank));
   }
 
@@ -5706,23 +5706,6 @@ static inline void __kmp_start_record(kmp_int32 gtid,
   tdg->tdg_status = KMP_TDG_RECORDING;
   tdg->rec_num_taskred = 0;
   tdg->rec_taskred_data = nullptr;
-  tdg->scheduling_info = new kmp_tdg_scheduling();
-  // tdg->scheduling_info = (kmp_tdg_scheduling*) __kmp_allocate(sizeof(kmp_tdg_scheduling));
-  // KH_TRACE(10,
-  //          ("__kmp_start_record(enter): tdg->scheduling_info->schedule_map=%p\n",
-  //           &tdg->scheduling_info->schedule_map));
-
-  // tdg->scheduling_info->schedule_map[0] = {
-  //     .state = TaskState::SCHEDULED,
-  //     .rank = 1,
-  //     .thread = 1,
-  //     .translated_rank = -1,
-  //     .task = nullptr,
-  // };
-
-  // KH_TRACE(10,
-  //         ("__kmp_start_record(enter): tdg->scheduling_info->schedule_map.count(0)=%d\n",
-  //         tdg->scheduling_info->schedule_map.count(0)));
 
   KMP_ATOMIC_ST_RLX(&tdg->num_tasks, 0);
 
@@ -5885,7 +5868,7 @@ kmp_int32 __kmpc_curr_tdg_idx(){
 
 void __kmpc_free_schedule_maps() {
   // delete __kmp_global_tdgs[0]->scheduling_info->schedule_map;
-  delete __kmp_global_tdgs[0]->scheduling_info;
+  //delete __kmp_global_tdgs[0]->scheduling_info;
   // for (int i = 0; i <= __kmp_curr_tdg_idx; i++) {
   //   if (__kmp_global_tdgs[i] != nullptr && __kmp_global_tdgs[i]->scheduling_info != nullptr)
   //     delete __kmp_global_tdgs[i]->scheduling_info->schedule_map;
