@@ -4509,6 +4509,10 @@ KMP_EXPORT kmp_int32 __kmpc_start_record_task(ident_t *loc, kmp_int32 gtid,
                                               kmp_int32 tdg_id);
 KMP_EXPORT void __kmpc_end_record_task(ident_t *loc, kmp_int32 gtid,
                                        kmp_int32 input_flags, kmp_int32 tdg_id);
+
+KMP_EXPORT void __kmpc_test_record(kmp_int32 gtid, kmp_taskgraph_flags_t *flags,
+                                   kmp_int32 tdg_id);
+
 #endif
 /* Interface to fast scalable reduce methods routines */
 
@@ -4709,7 +4713,7 @@ struct kmp_target_task_data {
 
   kmp_target_task_data &operator=(const kmp_target_task_data &other);
 
-private:
+public:
   void allocBuffers();
   void deleteBuffers();
   void copyBuffers(void **args_base_p, void **args_p, kmp_int64 *arg_sizes_p,

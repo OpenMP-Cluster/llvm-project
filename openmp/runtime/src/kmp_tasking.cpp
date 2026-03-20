@@ -1769,9 +1769,18 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   // Allocate and assign data integration between target regions and tasks.
 #if OMPX_TASKGRAPH
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(retval);
-  kmp_target_task_data_t *td_target_info =
-      new kmp_target_task_data_t(device_id, outlined_fn_id, num_args, args_base,
-                                 args, arg_sizes, arg_types);
+  // kmp_target_task_data_t *td_target_info =
+  //     new kmp_target_task_data_t(device_id, outlined_fn_id, num_args, args_base,
+  //                                args, arg_sizes, arg_types);
+
+  kmp_target_task_data_t *td_target_info = (kmp_target_task_data_t*) __kmp_allocate(sizeof(kmp_target_task_data_t));
+
+  td_target_info->device_id = device_id;
+  td_target_info->outlined_fn_id = outlined_fn_id;
+  td_target_info->num_args = num_args;
+  td_target_info->allocBuffers();
+  td_target_info->copyBuffers(args_base, args, arg_sizes, arg_types);
+
   taskdata->td_target_info = td_target_info;
 #endif
   return retval;
