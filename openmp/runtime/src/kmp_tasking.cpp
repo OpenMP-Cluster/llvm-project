@@ -497,7 +497,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   kmp_int32 tid = __kmp_tid_from_gtid(gtid);
   kmp_thread_data_t *thread_data;
 
-  KA_TRACE(20,
+  KG_TRACE(20,
            ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata));
 
   if (UNLIKELY(taskdata->td_flags.tiedness == TASK_UNTIED)) {
@@ -505,7 +505,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
     // freed prematurely
     kmp_int32 counter = 1 + KMP_ATOMIC_INC(&taskdata->td_untied_count);
     KMP_DEBUG_USE_VAR(counter);
-    KA_TRACE(
+    KG_TRACE(
         20,
         ("__kmp_push_task: T#%d untied_count (%d) incremented for task %p\n",
          gtid, counter, taskdata));
@@ -513,7 +513,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
 
   // The first check avoids building task_team thread data if serialized
   if (UNLIKELY(taskdata->td_flags.task_serial)) {
-    KA_TRACE(20, ("__kmp_push_task: T#%d team serialized; returning "
+    KG_TRACE(20, ("__kmp_push_task: T#%d team serialized; returning "
                   "TASK_NOT_PUSHED for task %p\n",
                   gtid, taskdata));
     return TASK_NOT_PUSHED;
@@ -551,7 +551,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
     if (__kmp_enable_task_throttling &&
         __kmp_task_is_allowed(gtid, __kmp_task_stealing_constraint, taskdata,
                               thread->th.th_current_task)) {
-      KA_TRACE(20, ("__kmp_push_task: T#%d deque is full; returning "
+      KG_TRACE(20, ("__kmp_push_task: T#%d deque is full; returning "
                     "TASK_NOT_PUSHED for task %p\n",
                     gtid, taskdata));
       return TASK_NOT_PUSHED;
@@ -575,7 +575,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
           __kmp_task_is_allowed(gtid, __kmp_task_stealing_constraint, taskdata,
                                 thread->th.th_current_task)) {
         __kmp_release_bootstrap_lock(&thread_data->td.td_deque_lock);
-        KA_TRACE(20, ("__kmp_push_task: T#%d deque is full on 2nd check; "
+        KG_TRACE(20, ("__kmp_push_task: T#%d deque is full on 2nd check; "
                       "returning TASK_NOT_PUSHED for task %p\n",
                       gtid, taskdata));
         return TASK_NOT_PUSHED;
@@ -598,7 +598,7 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
         TCR_4(thread_data->td.td_deque_ntasks) + 1); // Adjust task count
   KMP_FSYNC_RELEASING(thread->th.th_current_task); // releasing self
   KMP_FSYNC_RELEASING(taskdata); // releasing child
-  KA_TRACE(20, ("__kmp_push_task: T#%d returning TASK_SUCCESSFULLY_PUSHED: "
+  KG_TRACE(20, ("__kmp_push_task: T#%d returning TASK_SUCCESSFULLY_PUSHED: "
                 "task=%p ntasks=%d head=%u tail=%u\n",
                 gtid, taskdata, thread_data->td.td_deque_ntasks,
                 thread_data->td.td_deque_head, thread_data->td.td_deque_tail));
@@ -2174,6 +2174,7 @@ kmp_int32 __kmp_omp_task(kmp_int32 gtid, kmp_task_t *new_task,
       }
     }
   }
+  KG_TRACE(10, ("__kmp_omp_task(exit): task_id=%d\n", new_taskdata->td_task_id));
   return TASK_CURRENT_NOT_QUEUED;
 }
 
@@ -4620,7 +4621,7 @@ void __kmpc_proxy_task_completed(kmp_int32 gtid, kmp_task_t *ptask) {
 void __kmpc_give_task(kmp_task_t *ptask, kmp_int32 start = 0) {
   KMP_DEBUG_ASSERT(ptask != NULL);
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(ptask);
-
+  KG_TRACE(10, ("__kmpc_give_task(enter): task_id=%d\n", taskdata->td_task_id));
   // Enqueue task to complete bottom half completion from a thread within the
   // corresponding team
   kmp_team_t *team = taskdata->td_team;
@@ -4654,6 +4655,7 @@ void __kmpc_give_task(kmp_task_t *ptask, kmp_int32 start = 0) {
       }
     }
   }
+  KG_TRACE(10, ("__kmpc_give_task(exit): task_id=%d, gtid=%d\n", taskdata->td_task_id, __kmp_gtid_from_thread(thread)));
 }
 
 /*!
@@ -5620,6 +5622,8 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   // std::vector<kmp_task_and_pred> this_memory_tasks = tdg->scheduling_info->memory_tasks;
   kmp_int32 this_num_roots = tdg->num_roots;
   kmp_int32 this_num_tasks = KMP_ATOMIC_LD_RLX(&tdg->num_tasks);
+  // KG_TRACE(10, ("(kmp_exec_tdg) tdg = %p\n", tdg));
+  // KG_TRACE(10, ("this_num_tasks = %d\n", this_num_tasks));
 
   kmp_info_t *thread = __kmp_threads[gtid];
   kmp_taskdata_t *parent_task = thread->th.th_current_task;
@@ -5636,6 +5640,8 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   if (tdg->rec_taskred_data) {
     __kmpc_taskred_init(gtid, tdg->rec_num_taskred, tdg->rec_taskred_data);
   }
+
+  // KG_TRACE(10, ("this_num_tasks = %d\n", KMP_ATOMIC_LD_RLX(&tdg->num_tasks)));
 
   for (kmp_int32 j = 0; j < this_num_tasks; j++) {
     kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(this_record_map[j].task);

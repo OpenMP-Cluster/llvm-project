@@ -800,7 +800,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
 
 //Adding Memory task to the tdg
   kmp_tdg_info_t *tdg =memory_taskdata->tdg;
-  memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
+  // memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
   KG_TRACE(10,("memory task tdg id: %d\n",memory_taskdata->td_tdg_task_id));
   // extend record_map if needed
   if (memory_taskdata->td_tdg_task_id >= tdg->map_size) {
@@ -951,6 +951,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
       KMP_ATOMIC_INC(&sink_info->npredecessors_counter);
     }
   }
+  KG_TRACE(10, ("(create_memory_task) tdg = %p\n", tdg));
   KG_TRACE(30,("__kmp_create_memory_task (exit)\n"));
   return memory_task;
 }
