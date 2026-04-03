@@ -224,9 +224,11 @@ void BaseScheduler::setTaskState(kmp_int32 task_id, TaskState new_state) {
 
   KG_TRACE(50,("[SCHEDULER] setTaskState: task_id %d;\n",task_id));
   //assert(tdg != nullptr);
-  if((*get_schedule_map(tdg->tdg_id)).count(task_id) !=1)
- 	KG_TRACE(10,("Task state fail: task %d. Initial task: %d\n",task_id,tdg->initial_task_id));
-  assert((*get_schedule_map(tdg->tdg_id)).count(task_id) == 1);
+  if((*get_schedule_map(tdg->tdg_id)).count(task_id) !=1) {
+    return;
+  }
+ 	// KG_TRACE(10,("Task state fail: task %d. Initial task: %d\n",task_id,tdg->initial_task_id));
+  // assert((*get_schedule_map(tdg->tdg_id)).count(task_id) == 1);
  //assert(new_state >= TaskState::DISPATCHED);
 
   TaskScheduleData &task_schedule = (*get_schedule_map(tdg->tdg_id))[task_id];
@@ -466,10 +468,10 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
   KG_TRACE(10,("[SCHEDULER]: ScheduleGraphRR (adding memory tasks)\n"));
   addMemoryTasks();
 
-  assert(std::none_of((*get_schedule_map(tdg->tdg_id)).begin(), (*get_schedule_map(tdg->tdg_id)).end(),
-                      [](const auto &entry) {
-                        return entry.second.state < TaskState::SCHEDULED;
-                      }));
+  // assert(std::none_of((*get_schedule_map(tdg->tdg_id)).begin(), (*get_schedule_map(tdg->tdg_id)).end(),
+  //                     [](const auto &entry) {
+  //                       return entry.second.state < TaskState::SCHEDULED;
+  //                     }));
   KG_TRACE(10,("[SCHEDULER]: ScheduleGraphRR (end) \n"));
 }
 

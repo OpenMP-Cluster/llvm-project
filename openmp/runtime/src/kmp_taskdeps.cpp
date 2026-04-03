@@ -13,6 +13,7 @@
 //#define KMP_SUPPORT_GRAPH_OUTPUT 1
 
 #include "kmp.h"
+#include "kmp_debug.h"
 #include "kmp_io.h"
 #include "kmp_wait_release.h"
 #include <cstdio>
@@ -710,11 +711,11 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
   mem_task_args->DstDevice, mem_task_args->SrcDevice);
 
   kmp_info_t *thread = __kmp_threads[gtid];
-#if USE_FAST_MEMORY
-  __kmp_fast_free(thread, mem_task_args);
-#else
-  __kmp_thread_free(thread, mem_task_args);
-#endif
+// #if USE_FAST_MEMORY
+//   __kmp_fast_free(thread, mem_task_args);
+// #else
+//   __kmp_thread_free(thread, mem_task_args);
+// #endif
 
 
 }
@@ -743,13 +744,15 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   InputFlags->hidden_helper = 1;
   kmp_info_t *thread = __kmp_threads[gtid];
 
-#if USE_FAST_MEMORY
+#if USE_FAST_MEMORY  
   auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
   __kmp_fast_allocate(thread, sizeof(kmp_memory_task_args_t)));
 #else
   auto mem_task_args = static_cast<kmp_memory_task_args_t *>(
   __kmp_thread_malloc(thread, sizeof(kmp_memory_task_args_t)));
 #endif
+
+  KG_TRACE(10, ("(create_memory_task) dep_addr=%p\n", dep_addr));
 
   mem_task_args->Dst = dep_addr;
   mem_task_args->Src = dep_addr;
@@ -788,6 +791,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   node->dn.npredecessors = -1;
 
   KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors = __kmp_add_node(thread, KMP_TASK_TO_TASKDATA(source)->td_depnode->dn.successors, node);
+  node->dn.successors = nullptr;
   node->dn.successors = __kmp_add_node(thread, node->dn.successors, KMP_TASK_TO_TASKDATA(target)->td_depnode);
   node->dn.npredecessors.fetch_add(2);
   KMP_TASK_TO_TASKDATA(target)->td_depnode->dn.npredecessors.fetch_add(1);
@@ -800,8 +804,8 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
 
 //Adding Memory task to the tdg
   kmp_tdg_info_t *tdg =memory_taskdata->tdg;
-  memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
-  KG_TRACE(10,("MT: taskdata: %p ; memory task tdg id: %d\n",memory_taskdata,memory_taskdata->td_tdg_task_id));
+  // memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
+  // KG_TRACE(10,("MT: taskdata: %p ; memory task tdg id: %d\n",memory_taskdata,memory_taskdata->td_tdg_task_id));
   // extend record_map if needed
   if (memory_taskdata->td_tdg_task_id >= tdg->map_size) {
     __kmp_acquire_bootstrap_lock(&tdg->graph_lock);
@@ -1579,7 +1583,7 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
     kmp_depnode_list_t* pred_successors = node_pred->dn.successors;
     kmp_depnode_list_t* pred_successors_next = node_pred->dn.successors->next;
 
-    while ( pred_successors_next->next != nullptr && pred_successors_next->node->dn.task != task) {
+    while ( pred_successors_next != nullptr && pred_successors_next->next != nullptr && pred_successors_next->node->dn.task != task) {
       pred_successors = pred_successors_next;
       pred_successors_next = pred_successors->next;
     }
@@ -1626,17 +1630,18 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
   KMP_RELEASE_DEPNODE(gtid, node);
 
   kmp_depnode_list_t *next;
-  for (kmp_depnode_list_t *p = node->dn.successors; p; p = next) {
+  for (kmp_depnode_list_t *p = node->dn.successors; p != nullptr; p = next) {
     kmp_depnode_t *successor = p->node;
+    if (successor == nullptr) continue;
     KMP_ATOMIC_DEC(&successor->dn.npredecessors);
     //We might want to launch the task if npredecessors == 0 but it won't happen hen removing memory tasks
     next = p->next;
-    __kmp_node_deref(thread, p->node);
-#if USE_FAST_MEMORY
-    __kmp_fast_free(thread, p);
-#else
-    __kmp_thread_free(thread, p);
-#endif
+//     __kmp_node_deref(thread, p->node);
+// #if USE_FAST_MEMORY
+//     __kmp_fast_free(thread, p);
+// #else
+//     __kmp_thread_free(thread, p);
+// #endif
   }
   __kmp_node_deref(thread, node);
   
