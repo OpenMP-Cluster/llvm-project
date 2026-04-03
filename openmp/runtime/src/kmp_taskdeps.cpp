@@ -800,8 +800,8 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
 
 //Adding Memory task to the tdg
   kmp_tdg_info_t *tdg =memory_taskdata->tdg;
-  // memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
-  KG_TRACE(10,("memory task tdg id: %d\n",memory_taskdata->td_tdg_task_id));
+  memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
+  KG_TRACE(10,("MT: taskdata: %p ; memory task tdg id: %d\n",memory_taskdata,memory_taskdata->td_tdg_task_id));
   // extend record_map if needed
   if (memory_taskdata->td_tdg_task_id >= tdg->map_size) {
     __kmp_acquire_bootstrap_lock(&tdg->graph_lock);

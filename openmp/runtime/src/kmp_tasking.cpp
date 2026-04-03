@@ -1709,6 +1709,7 @@ kmp_task_t *__kmp_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
     taskdata->tdg = __kmp_global_tdgs[__kmp_curr_tdg_idx];
     //taskdata->td_task_id = KMP_GEN_TASK_ID();
     taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
+    KG_TRACE(10,("alloc: taskdata: %p ; memory task tdg id: %d\n",taskdata,taskdata->td_tdg_task_id));
     if(taskdata->tdg->initial_task_id == 0 || taskdata->tdg->initial_task_id > taskdata->td_task_id)
       tdg->initial_task_id = taskdata->td_task_id;
   }
@@ -4790,6 +4791,7 @@ kmp_task_t *__kmp_task_dup_alloc(kmp_info_t *thread, kmp_task_t *task_src
   if (taskdata->is_taskgraph && !taskloop_recur &&
       __kmp_tdg_is_recording(taskdata_src->tdg->tdg_status))
     taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
+    KG_TRACE(10,("alloc: taskdata: %p ; memory task tdg id: %d\n",taskdata,taskdata->td_tdg_task_id));
 #endif
   taskdata->td_task_id = KMP_GEN_TASK_ID();
   if (task->shareds != NULL) { // need setup shareds pointer
