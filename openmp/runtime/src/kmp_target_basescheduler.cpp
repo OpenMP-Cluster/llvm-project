@@ -12,6 +12,7 @@
 
 #include "kmp_target_basescheduler.h"
 #include "kmp.h"
+#include "kmp_debug.h"
 
 #include <algorithm>
 #include <chrono>
@@ -406,6 +407,7 @@ void BaseScheduler::resetMemoryTasks(){
   KG_TRACE(10,("resetMemoryTasks start\n"));
   for ( kmp_int32 tdg_task_id = tdg->num_normal_tasks ; tdg_task_id < tdg->num_tasks ; tdg_task_id++ ) {
     __kmpc_remove_task(&tdg->record_map[tdg_task_id]);
+    (*get_schedule_map(tdg->tdg_id)).erase(KMP_TDG_TASKID_TO_TASKID(tdg,tdg_task_id));
   }
   tdg->num_tasks.store(tdg->num_normal_tasks.load());
   KG_TRACE(10,("resetMemoryTasks end\n"));
@@ -419,6 +421,7 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
 
   kmp_int32 NumDevices = __kmpc_get_num_devices();
   for (auto &map_entry : (*get_schedule_map(tdg->tdg_id))) {
+    KG_TRACE(30, ("scheduleGraphRR: map_entry.first: %d\n", map_entry.first));
     TaskScheduleData &task_schedule = map_entry.second;
     auto &task = task_schedule.task;
 

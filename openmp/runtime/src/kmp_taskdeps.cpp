@@ -778,6 +778,8 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
  // Setup the arguments for the memory task
  memory_task->shareds = static_cast<void *>(mem_task_args);
 
+ if (memory_taskdata->tdg && __kmp_tdg_is_recording(memory_taskdata->tdg->tdg_status)) {
+
 #if USE_FAST_MEMORY
   kmp_depnode_t *node =
       (kmp_depnode_t *)__kmp_fast_allocate(thread, sizeof(kmp_depnode_t));
@@ -801,7 +803,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(source));
   __kmp_print_node(gtid,KMP_TASK_TO_TASKDATA(target));
   __kmp_print_node(gtid,memory_taskdata);
-
+  }
 //Adding Memory task to the tdg
   kmp_tdg_info_t *tdg =memory_taskdata->tdg;
   // memory_taskdata->td_tdg_task_id = KMP_ATOMIC_INC(&__kmp_tdg_task_id);
@@ -1553,6 +1555,8 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
   kmp_depnode_t *node = taskdata->td_depnode;
   kmp_tdg_info_t *tdg = taskdata->tdg;
   
+  KG_TRACE(30, ("__kmpc_remove_task: td_task_id=%d\n", taskdata->td_task_id));
+
   //Removing the task from the successor list of the predecessor
   for ( kmp_int32 idx = 0; idx < task_tdg->npredecessors ; idx++) {  
     kmp_node_info_t *pred_tdg = &tdg->record_map[idx];
@@ -1629,28 +1633,28 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
   node->dn.task = NULL; // mark this task as finished, so no new dependencies are generated
   KMP_RELEASE_DEPNODE(gtid, node);
 
-  kmp_depnode_list_t *next;
-  for (kmp_depnode_list_t *p = node->dn.successors; p != nullptr; p = next) {
-    kmp_depnode_t *successor = p->node;
-    if (successor == nullptr) continue;
-    KMP_ATOMIC_DEC(&successor->dn.npredecessors);
-    //We might want to launch the task if npredecessors == 0 but it won't happen hen removing memory tasks
-    next = p->next;
+  // kmp_depnode_list_t *next;
+  // for (kmp_depnode_list_t *p = node->dn.successors; p != nullptr; p = next) {
+  //   kmp_depnode_t *successor = p->node;
+  //   if (successor == nullptr) continue;
+  //   KMP_ATOMIC_DEC(&successor->dn.npredecessors);
+  //   //We might want to launch the task if npredecessors == 0 but it won't happen hen removing memory tasks
+  //   next = p->next;
 //     __kmp_node_deref(thread, p->node);
 // #if USE_FAST_MEMORY
 //     __kmp_fast_free(thread, p);
 // #else
 //     __kmp_thread_free(thread, p);
 // #endif
-  }
-  __kmp_node_deref(thread, node);
+  // }
+  // __kmp_node_deref(thread, node);
   
-#if USE_FAST_MEMORY
-  __kmp_fast_free(thread, task);
-  __kmp_fast_free(thread, taskdata);
-#else /* ! USE_FAST_MEMORY */
-  __kmp_thread_free(thread, task);
-  __kmp_thread_free(thread, taskdata);
-#endif
+// #if USE_FAST_MEMORY
+//   __kmp_fast_free(thread, task);
+//   __kmp_fast_free(thread, taskdata);
+// #else /* ! USE_FAST_MEMORY */
+//   __kmp_thread_free(thread, task);
+//   __kmp_thread_free(thread, taskdata);
+// #endif
   KG_TRACE(30,("__kmpc_remove_task (exit)\n"));
 }
