@@ -746,6 +746,7 @@ void HEFTScheduler::acquireNewGraphPost() {
   KG_TRACE(10,("[HEFT]: AcquireNewGraphPost (start)\n"));
   Ctx.clear();
   Ctx.setTaskMap(__kmpc_curr_tdg_idx());
+  dumpTaskGraph();
   Ctx.extrapolateCompCost(scheduling_iteration_counter, initial_schedule_policy, initial_iteration);
   Ctx.computeUpwardRanks();
   KG_TRACE(10,("[HEFT]: AcquireNewGraphPost (end)\n"));

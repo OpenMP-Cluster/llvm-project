@@ -133,7 +133,7 @@ void BaseScheduler::acquireNewGraph(kmp_tdg_info_t* new_tdg) {
   if (graph_counter != 0) {
     graph_counter++;
   }
-  dumpTaskGraph();
+  // dumpTaskGraph();
   graph_counter++;
   KG_TRACE(10,("acquireNewGraph Exit\n"));
 }

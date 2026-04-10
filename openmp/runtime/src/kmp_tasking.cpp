@@ -1112,6 +1112,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
       KA_TRACE(10, ("__kmp_task_finish(exit): T#%d partially done task %p, "
                     "resuming task %p\n",
                     gtid, taskdata, resumed_task));
+      KG_TRACE(30, ("task_finish: taskgroup->count = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
       return;
     }
   }
@@ -1279,6 +1280,8 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   KA_TRACE(
       10, ("__kmp_task_finish(exit): T#%d finished task %p, resuming task %p\n",
            gtid, taskdata, resumed_task));
+  
+  KG_TRACE(30, ("task_finish: taskgroup->count = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
 
   return;
 }
@@ -5644,7 +5647,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   }
 
   // KG_TRACE(10, ("this_num_tasks = %d\n", KMP_ATOMIC_LD_RLX(&tdg->num_tasks)));
-
+  KG_TRACE(30, ("exec_tdg: taskgroup_count = %d\n", KMP_ATOMIC_LD_ACQ(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count))));
   for (kmp_int32 j = 0; j < this_num_tasks; j++) {
     kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(this_record_map[j].task);
 
@@ -5660,6 +5663,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
 
     if (parent_taskgroup) {
       KMP_ATOMIC_INC(&parent_taskgroup->count);
+      int taskgroup_count_gdb = KMP_ATOMIC_LD_ACQ(&parent_taskgroup->count);
       // The taskgroup is different so we must update it
       td->td_taskgroup = parent_taskgroup;
     } else if (td->td_taskgroup != nullptr) {
