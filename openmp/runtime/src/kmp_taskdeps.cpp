@@ -1574,11 +1574,11 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
     for (kmp_int32 i = 0 ; i < pred_tdg->nsuccessors ; i++) {
       if ( pred_tdg->successors[i] == taskdata->td_tdg_task_id) {
 	      pred_tdg->successors[i] = pred_tdg->successors[pred_tdg->nsuccessors-1];
+              pred_tdg->nsuccessors--;
         break;
       }
     } 
-    // pred_tdg->nsuccessors--;
-
+    
     //Removing for kmp_dep_node
     kmp_task_t *predecessor = pred_tdg->task;  
     kmp_taskdata_t *taskdata_pred = KMP_TASK_TO_TASKDATA(predecessor);
@@ -1615,7 +1615,7 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
     //Removing for kmp_node_info
     for (kmp_int32 i = 0 ; i < succ_tdg->npredecessors ; i++) {
       if ( succ_tdg->predecessors[i] == taskdata->td_tdg_task_id) {
-	      succ_tdg->predecessors[i] = succ_tdg->predecessors[succ_tdg->npredecessors-1];
+	succ_tdg->predecessors[i] = succ_tdg->predecessors[succ_tdg->npredecessors-1];
         break;
       }
     } 
