@@ -5648,7 +5648,8 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
 
   // KG_TRACE(10, ("this_num_tasks = %d\n", KMP_ATOMIC_LD_RLX(&tdg->num_tasks)));
   KG_TRACE(30, ("exec_tdg: taskgroup_count = %d\n", KMP_ATOMIC_LD_ACQ(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count))));
-  for (kmp_int32 j = 0; j < this_num_tasks; j++) {
+  KMP_ATOMIC_ST_RLX(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count), 0);
+  for (kmp_int32 j = 0; j < KMP_ATOMIC_LD_RLX(&tdg->num_tasks); j++) {
     kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(this_record_map[j].task);
 
     td->td_parent = parent_task;

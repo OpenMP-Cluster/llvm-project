@@ -806,7 +806,7 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
   }
   else {
     //Adding Memory task to the tdg
-    memory_taskdata->td_tdg_task_id = KMP_ATOMIC_LD_ACQ(&memory_taskdata->tdg->num_tasks);
+    memory_taskdata->td_tdg_task_id = KMP_ATOMIC_LD_ACQ(&memory_taskdata->tdg->num_tasks)-1;
     // KMP_ATOMIC_DEC(&memory_taskdata->td_taskgroup->count);
   }
   kmp_tdg_info_t *tdg =memory_taskdata->tdg;
@@ -1569,7 +1569,7 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
 
   //Removing the task from the successor list of the predecessor
   for ( kmp_int32 idx = 0; idx < task_tdg->npredecessors ; idx++) {  
-    kmp_node_info_t *pred_tdg = &tdg->record_map[idx];
+    kmp_node_info_t *pred_tdg = &tdg->record_map[task_tdg->predecessors[idx]];
     //Removing for kmp_node_info
     for (kmp_int32 i = 0 ; i < pred_tdg->nsuccessors ; i++) {
       if ( pred_tdg->successors[i] == taskdata->td_tdg_task_id) {
@@ -1611,15 +1611,15 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
   //Removing the successors
   
   for ( kmp_int32 idx = 0; idx < task_tdg->nsuccessors ; idx++) {  
-    kmp_node_info_t *succ_tdg = &tdg->record_map[idx];
+    kmp_node_info_t *succ_tdg = &tdg->record_map[task_tdg->successors[idx]];
     //Removing for kmp_node_info
     for (kmp_int32 i = 0 ; i < succ_tdg->npredecessors ; i++) {
       if ( succ_tdg->predecessors[i] == taskdata->td_tdg_task_id) {
 	succ_tdg->predecessors[i] = succ_tdg->predecessors[succ_tdg->npredecessors-1];
+  succ_tdg->npredecessors--;
         break;
       }
     } 
-    succ_tdg->npredecessors--;
     KMP_ATOMIC_DEC(&succ_tdg->npredecessors_counter);
   }
   // Check mutexinoutset dependencies, release locks
@@ -1667,6 +1667,7 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
 //   __kmp_thread_free(thread, taskdata);
 // #endif
 
-  // KMP_ATOMIC_DEC(taskdata->td_taskgroup->count);
+  KMP_ATOMIC_DEC(&tdg->num_tasks);
+  // KMP_ATOMIC_DEC(&taskdata->td_taskgroup->count);
   KG_TRACE(30,("__kmpc_remove_task (exit)\n"));
 }
