@@ -1113,6 +1113,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
                     "resuming task %p\n",
                     gtid, taskdata, resumed_task));
       KG_TRACE(30, ("task_finish: taskgroup->count = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
+      KG_TRACE(30, ("task_finish: current_task->td_incomplete_child_tasks = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_incomplete_child_tasks)));
       return;
     }
   }
@@ -1283,6 +1284,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   
   KG_TRACE(30, ("task_finish: taskgroup->count = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
 
+  KG_TRACE(30, ("task_finish: current_task->td_incomplete_child_tasks = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_incomplete_child_tasks)));
   return;
 }
 

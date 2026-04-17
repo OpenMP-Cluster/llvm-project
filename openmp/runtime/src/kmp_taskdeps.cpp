@@ -1636,12 +1636,12 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
     taskdata->td_dephash = NULL;
   }
 
-  if (!node)
-    return;
-  KMP_ACQUIRE_DEPNODE(gtid, node);
+  if (node != nullptr) {
+    KMP_ACQUIRE_DEPNODE(gtid, node);
+    node->dn.task = NULL; // mark this task as finished, so no new dependencies are generated
+    KMP_RELEASE_DEPNODE(gtid, node);
+  }
 
-  node->dn.task = NULL; // mark this task as finished, so no new dependencies are generated
-  KMP_RELEASE_DEPNODE(gtid, node);
 
   // kmp_depnode_list_t *next;
   // for (kmp_depnode_list_t *p = node->dn.successors; p != nullptr; p = next) {
@@ -1667,7 +1667,26 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
 //   __kmp_thread_free(thread, taskdata);
 // #endif
 
-  KMP_ATOMIC_DEC(&tdg->num_tasks);
+  // KMP_ATOMIC_DEC(&tdg->num_tasks);
   // KMP_ATOMIC_DEC(&taskdata->td_taskgroup->count);
+
+  kmp_int32 *successorsList = (kmp_int32 *)__kmp_allocate(
+      __kmp_successors_size * sizeof(kmp_int32));
+  kmp_int32 *predecessorsList = (kmp_int32 *)__kmp_allocate(
+      __kmp_predecessors_size * sizeof(kmp_int32));
+  kmp_recorded_task_time_t *taskTimeList = (kmp_recorded_task_time_t *)__kmp_allocate(
+      __kmpc_get_num_devices() * sizeof(kmp_recorded_task_time_t));
+  task_tdg->task = nullptr;
+  task_tdg->successors = successorsList;
+  task_tdg->predecessors = predecessorsList;
+  task_tdg->nsuccessors = 0;
+  task_tdg->npredecessors = 0;
+  task_tdg->successors_size = __kmp_successors_size;
+  task_tdg->predecessors_size = __kmp_predecessors_size;
+  task_tdg->is_target_task = 0;
+  task_tdg->target_data = new kmp_target_task_data_t();
+  task_tdg->task_time = taskTimeList;
+  KMP_ATOMIC_ST_REL(&task_tdg->npredecessors_counter, 0);  
+
   KG_TRACE(30,("__kmpc_remove_task (exit)\n"));
 }
