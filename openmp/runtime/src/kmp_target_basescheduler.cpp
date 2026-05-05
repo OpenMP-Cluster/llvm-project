@@ -322,8 +322,8 @@ void BaseScheduler::addMemoryTasks(){
   for (auto &map_entry : (*get_schedule_map(tdg->tdg_id))) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
-    if (isTargetDataTask(task))
-     continue;
+    // if (isTargetDataTask(task))
+    //  continue;
     kmp_int32 task_rank = task_schedule.rank;
     KG_TRACE(10,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
@@ -340,12 +340,17 @@ void BaseScheduler::addMemoryTasks(){
             KG_TRACE(10,("[SCHEDULER-MT] arg successor: %d\n",successor->target_data->args[J]));
               if (task->target_data->args_base[I] == successor->target_data->args_base[J]) {//TODO: Should we compare args or args_base?
 
-		kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
-		kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
+		// kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
+		// kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
+
+      kmp_int32 in_rank = task_rank-1;    
+      kmp_int32 out_rank = successor_rank-1;
+      
+      if(in_rank == out_rank) continue;
 
           	kmp_task_t* memory_task= __kmp_create_memory_task(gtid,task->task,successor->task,in_rank, out_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
 
-		KG_TRACE(10,("[SCHEDULER-MT] Adding memory task %d ; predecessor : %d ; successor : %d \n", KMP_TASK_TO_TASKDATA(memory_task)->td_task_id,KMP_TASKPTR_TO_TASKID(task),KMP_TASKPTR_TO_TASKID(successor)));
+		// KG_TRACE(10,("[SCHEDULER-MT] Adding memory task %d ; predecessor : %d ; successor : %d \n", KMP_TASK_TO_TASKDATA(memory_task)->td_task_id,KMP_TASKPTR_TO_TASKID(task),KMP_TASKPTR_TO_TASKID(successor)));
 
               }
             }
