@@ -823,6 +823,14 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
       KMP_MEMCPY(new_record, tdg->record_map,
                  old_size * sizeof(kmp_node_info_t));
       tdg->record_map = new_record;
+
+      for (auto &map_entry : (*get_schedule_map(tdg->tdg_id))) {
+	map_entry.second = TaskScheduleData{.state = map_entry.second.state,
+                                            .rank = map_entry.second.rank,
+                                            .translated_rank = map_entry.second.translated_rank,
+                                            .task = &new_record[KMP_TASK_TO_TASKDATA(map_entry.second.task->task)->td_tdg_task_id],
+                                           };
+      }
       for(kmp_int i =0; i<old_size;i++){
         old_record[i].target_data = nullptr;
       }

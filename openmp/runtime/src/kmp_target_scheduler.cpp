@@ -17,8 +17,12 @@
 #include "kmp_target_graph_roundrobin.h"
 #include "kmp_target_roundrobin.h"
 
-int32_t __kmpc_get_num_devices(){
-  return omp_get_num_devices();
+static kmp_int32 num_devices = -1;
+
+kmp_int32 __kmpc_get_num_devices(){
+  if (num_devices!=-1)
+    return num_devices;
+  return num_devices = omp_get_num_devices();
 }
 
 // Strings allowed to be passed in the OMPCLUSTER_SCHEDULER environment

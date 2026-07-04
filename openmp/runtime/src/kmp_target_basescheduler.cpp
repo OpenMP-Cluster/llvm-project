@@ -319,18 +319,20 @@ void BaseScheduler::addMemoryTasks(){
   KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, tdg->num_tasks.load());
   KG_TRACE(10, ("addMemoryTasks: __kmp_tdg_task_id = %d\n", __kmp_tdg_task_id.load()));
   KG_TRACE(10, ("addMemoryTasks: tdg->num_normal_tasks = %d, tdg->num_tasks = %d\n", tdg->num_normal_tasks.load(), tdg->num_tasks.load()));
+
   for (auto &map_entry : (*get_schedule_map(tdg->tdg_id))) {
     TaskScheduleData &task_schedule = map_entry.second;
     const kmp_node_info* task = task_schedule.task;
     // if (isTargetDataTask(task))
     //  continue;
-    kmp_int32 task_rank = task_schedule.rank;
+    kmp_int32 task_rank = task_schedule.rank-1;
+    kmp_int32 task_id = KMP_TASKPTR_TO_TDG_TASKID(task);
     KG_TRACE(10,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
      if (isTargetDataTask(successor))
        continue;
-    kmp_int32 successor_rank = (*get_schedule_map(tdg->tdg_id))[KMP_TASKPTR_TO_TASKID(successor)].rank;
+    kmp_int32 successor_rank = get_scheduleTask(KMP_TASKPTR_TO_TASKID(successor));
     KG_TRACE(10,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
@@ -343,13 +345,18 @@ void BaseScheduler::addMemoryTasks(){
 		// kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
 		// kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
 
-      kmp_int32 in_rank = task_rank-1;    
-      kmp_int32 out_rank = successor_rank-1;
+                kmp_int32 in_rank = task_rank;    
+                kmp_int32 out_rank = successor_rank;
       
-      if(in_rank == out_rank) continue;
+                if(in_rank == out_rank) continue;
 
           	kmp_task_t* memory_task= __kmp_create_memory_task(gtid,task->task,successor->task,in_rank, out_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
 
+		//The pointers might have changed if the record_map was extended
+		if (task != &(tdg->record_map[task_id])) {
+                  task = &(tdg->record_map[task_id]);
+                  successor = &(tdg->record_map[task->successors[idx_succ]]);
+		}
 		// KG_TRACE(10,("[SCHEDULER-MT] Adding memory task %d ; predecessor : %d ; successor : %d \n", KMP_TASK_TO_TASKDATA(memory_task)->td_task_id,KMP_TASKPTR_TO_TASKID(task),KMP_TASKPTR_TO_TASKID(successor)));
 
               }
