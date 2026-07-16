@@ -1769,6 +1769,12 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   if (__kmp_enable_hidden_helper)
     input_flags.hidden_helper = TRUE;
 
+KG_TRACE(10,("__kmpc_omp_target_task_alloc:")); 
+for (int i =0 ;i < num_args; i++) {
+	KG_TRACE(10,("%p,\n ", args[i])); 
+}
+KG_TRACE(10,("\n")); 
+
   kmp_task_t *retval = __kmpc_omp_task_alloc(
     loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry);
 

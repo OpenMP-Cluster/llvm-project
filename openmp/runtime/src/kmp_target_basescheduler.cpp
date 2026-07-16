@@ -337,9 +337,9 @@ void BaseScheduler::addMemoryTasks(){
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
 	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
-            KG_TRACE(10,("[SCHEDULER-MT] arg task: %d\n",task->target_data->args[I]));
+            KG_TRACE(10,("[SCHEDULER-MT] arg task: %p\n",task->target_data->args[I]));
             for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
-            KG_TRACE(10,("[SCHEDULER-MT] arg successor: %d\n",successor->target_data->args[J]));
+            KG_TRACE(10,("[SCHEDULER-MT] arg successor: %p\n",successor->target_data->args[J]));
               if (task->target_data->args_base[I] == successor->target_data->args_base[J]) {//TODO: Should we compare args or args_base?
 
 		// kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
