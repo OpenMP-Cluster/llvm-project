@@ -340,8 +340,9 @@ void BaseScheduler::addMemoryTasks(){
             KG_TRACE(10,("[SCHEDULER-MT] arg task: %p\n",task->target_data->args[I]));
             for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
             KG_TRACE(10,("[SCHEDULER-MT] arg successor: %p\n",successor->target_data->args[J]));
-              if (task->target_data->args_base[I] == successor->target_data->args_base[J]) {//TODO: Should we compare args or args_base?
+              if (task->target_data->args_base[I] == successor->target_data->args_base[J] && task->target_data->arg_types[I]!=0x120) {//TODO: Should we compare args or args_base?
 
+		
 		// kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
 		// kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
 
@@ -360,7 +361,7 @@ void BaseScheduler::addMemoryTasks(){
 		// KG_TRACE(10,("[SCHEDULER-MT] Adding memory task %d ; predecessor : %d ; successor : %d \n", KMP_TASK_TO_TASKDATA(memory_task)->td_task_id,KMP_TASKPTR_TO_TASKID(task),KMP_TASKPTR_TO_TASKID(successor)));
 
               }
-            }
+	    }
           }
         }
       }

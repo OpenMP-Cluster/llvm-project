@@ -118,6 +118,9 @@ public:
   /// Indicates how long each task should take to execute after being scheduled on each device.
   using ComputationMap = std::unordered_map<TaskPtr,std::unordered_map<kmp_int32,double>>;
 
+  
+  using kmp_device_type = int;
+
   friend class ::HEFTScheduler;
 
 public:
@@ -188,6 +191,7 @@ public:
   void dump(kmp_int32 NumDevices);
 
 private:
+  void constructDeviceTypeMap();
   void computeAvgCompCosts();
   void homogeneousInterpolation();
   void fastProportionalInterpolation();
@@ -273,6 +277,10 @@ private:
   ComputationMap ComputationCost;
   /// File where to dump HEFT information
   std::string HEFTLogPath;
+  /// Using heterogeneous Interpolation
+  bool heterogeneousInterpolation = 0;
+  std::unordered_map<int,kmp_device_type> deviceTypeMap;
+  kmp_int32 deviceTypeNumber = 1;
 };
 
 } // namespace detail

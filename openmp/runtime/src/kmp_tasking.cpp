@@ -1769,11 +1769,11 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   if (__kmp_enable_hidden_helper)
     input_flags.hidden_helper = TRUE;
 
-KG_TRACE(10,("__kmpc_omp_target_task_alloc:")); 
-for (int i =0 ;i < num_args; i++) {
-	KG_TRACE(10,("%p,\n ", args[i])); 
-}
-KG_TRACE(10,("\n")); 
+  KG_TRACE(10,("__kmpc_omp_target_task_alloc:")); 
+  for (int i =0 ;i < num_args; i++) {
+    KG_TRACE(10,("%p, type: %p\n ", args[i],arg_types[i])); 
+  }
+  KG_TRACE(10,("\n")); 
 
   kmp_task_t *retval = __kmpc_omp_task_alloc(
     loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry);
@@ -1833,8 +1833,8 @@ __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_info_t *thread;
   int discard = 0 /* false */;
-  KA_TRACE(
-      30, ("__kmp_invoke_task(enter): T#%d invoking task %p, current_task=%p\n",
+  KG_TRACE(
+      5, ("__kmp_invoke_task(enter): T#%d invoking task %p, current_task=%p\n",
            gtid, taskdata, current_task));
   KMP_DEBUG_ASSERT(task);
   if (UNLIKELY(taskdata->td_flags.proxy == TASK_PROXY &&

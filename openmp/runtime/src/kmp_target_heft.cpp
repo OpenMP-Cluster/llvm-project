@@ -44,9 +44,12 @@ HEFTContext::HEFTContext(kmp_tdg_info *tdg)
     DefaultCommCost = std::stod(EnvStr);
   if (char *EnvStr = std::getenv("OMPCLUSTER_HEFT_LOG"))
     HEFTLogPath = EnvStr;
-
   if (char *EnvStr = std::getenv("OMPCLUSTER_NUM_EXEC_EVENT_HANDLERS"))
     NumThreads = std::stoi(EnvStr);
+  if (char *EnvStr = std::getenv("OMPCLUSTER_INTERPOLATION_TYPE"))
+    heterogeneousInterpolation = std::stoi(EnvStr);
+  
+//  constructDeviceTypeMap();
 
 }
 
@@ -317,7 +320,6 @@ void HEFTContext::generalProportionalInterpolation() {
      }
    }
  }
-//TODO print the initial result
 
 //Interpolation of the pivot Beta[0][X]
 
@@ -331,47 +333,7 @@ void HEFTContext::generalProportionalInterpolation() {
   } 
   
   double geomean_b0 = std::exp(sum_b0/size_b0);
-  
-//  std::deque<int> devices_to_visite;
-//  auto  it = devices_to_visite.begin();
-//  for (int i = 0; i < device_number ; ++i) {
-//    devices_to_visite.push_back(i);
-//  }
-//  kmp_int32 b0_count = 0;
-//
-//  while(b0_count < device_number) {
-//    while (!devices_to_visite.empty()) { 
-//      kmp_int32 device_1 = devices_to_visite.front();
-//      devices_to_visite.pop_front();
-//      if(beta[0][device_1] == -1.0) // We don't have the value yet, we can't search another beta from it
-//        continue; 
-//      b0_count++;
-//      for ( kmp_int32 device_2 = 1 ; device_2 < device_number ; device_2++) {
-//        if ( beta[0][device_2] != -1.0 ) //We already know this beta
-//          continue;
-//        if ( beta[device_1][device_2] == -1.0) //We need this beta to compute the new one
-//          continue;
-//        beta[0][device_2] = beta[0][device_1] * beta[device_1][device_2]; 
-//        beta[device_2][0] = 1/beta[0][device_2]; 
-//        b0_count++;
-//        devices_to_visite.push_back(device_2);
-//     }
-//     if (b0_count == device_number)
-//       break;
-//   }
-//   if (b0_count < device_number) { //We add a value with the partial homogeneous hypothesis
-//     for(kmp_int32 device_1 = 1 ; device_1 <= device_number ; device_1++ ){
-//       if (beta[0][device_1] <= 0.0 ){
-//         beta[0][device_1] = geomean_b0;
-//         beta[device_1][0] = 1/geomean_b0 ;
-//         b0_count++; 
-//         devices_to_visite.push_back(device_1);
-//         break;
-//       } 
-//     } 
-//   }
-//  }
-  
+
   std::deque<kmp_int32> devices_to_visite;
   for (kmp_int32 i = 0; i < device_number ; ++i) {
     devices_to_visite.push_back(i);
@@ -407,7 +369,6 @@ void HEFTContext::generalProportionalInterpolation() {
        devices_to_visite.pop_front();
     }
   }
-//TODO print the computed pivot
 
 //Interpolation of the Betas[X][Y]
   for( kmp_int32 device_0 = 1; device_0 < device_number ; device_0++ ) {
@@ -430,24 +391,6 @@ void HEFTContext::generalProportionalInterpolation() {
       beta[device_1][device_0] =  1/beta[device_0][device_1];
     }
   } 
-//  for( kmp_int32 device_0 = 1; device_0 < device_number ; device_0++ ) {
-//    kmp_int32 second_device;
-//    //Searching for a suitable Beta for beta_0
-//    for ( kmp_int32 device_1 = device_0 + 1 ; device_1 < device_number ; device_1++){
-//      if(beta[device_0][device_1] == -1.0) // We don't have the value yet, we can't search another beta from it
-//        continue;
-//      second_device = device_1;
-//      break;
-//    }
-//   
-//    for ( kmp_int32 device_1 = device_0 + 1 ; device_1 < device_number ; device_1++){
-//      if(beta[device_0][device_1] != -1.0) // We already have a value, no need to complete
-//        continue;
-//      beta[device_0][device_1] =  beta[device_0][second_device]*beta[second_device][0]*beta[0][device_1];
-//      beta[device_1][device_0] =  1/beta[device_0][device_1];
-//    }
-//  }
-//TODO print the resulting beta
 
 // We just need to compute the costs now
   
@@ -479,6 +422,9 @@ void HEFTContext::extrapolateCompCost(kmp_int32 scheduling_iteration_counter, km
 
   KG_TRACE(10,("[HEFT] extrapolateCompCost (start)\n"));
   //__kmpc_print_profiled_comp_cost(tdg);
+  
+  //For each device type, we create a limited CompCost matrix, this map helps us reconstruct the full matrix 
+  std::vector<std::unordered_map<int,int>> device_restricted_map(deviceTypeNumber);
 
   bool is_incomplete_profile = false; 
   for (auto Taskptr : TopologicalOrder(tdg)){
@@ -518,18 +464,22 @@ void HEFTContext::extrapolateCompCost(kmp_int32 scheduling_iteration_counter, km
   }
 
   //general case
-  //TODO: implement it ( in case we can't have a sufficent condition to compute the Interpolation with partial homogeneous hypothessis)  
   generalProportionalInterpolation(); 
   computeAvgCompCosts();
 
   KG_TRACE(10,("[HEFT] extrapolateCompCost (end): general case\n"));
 
-//TODO:
-//If Less organized : normal matrix completion (proportional hypothesis) compute ACC[T]
-
 }
 
 
+void HEFTContext::constructDeviceTypeMap(){
+  std::unordered_map<kmp_device_type,int> device_type_count;
+  for (int device = 0; device < __kmpc_get_num_devices(); device++) {
+    deviceTypeMap[device] = __kmpc_get_device_type(device);
+    device_type_count[deviceTypeMap[device]]++;      
+  }
+  deviceTypeNumber = device_type_count.size();
+}
 
 /// Dump internal HEFT information to a file.
 void HEFTContext::dump(kmp_int32 NumDevices) {
