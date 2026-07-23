@@ -327,19 +327,19 @@ void BaseScheduler::addMemoryTasks(){
     //  continue;
     kmp_int32 task_rank = task_schedule.rank-1;
     kmp_int32 task_id = KMP_TASKPTR_TO_TDG_TASKID(task);
-    KG_TRACE(10,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
+    KG_TRACE(50,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
      if (isTargetDataTask(successor))
        continue;
     kmp_int32 successor_rank = get_scheduleTask(KMP_TASKPTR_TO_TASKID(successor));
-    KG_TRACE(10,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
+    KG_TRACE(50,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
       if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
 	if(successor->target_data != nullptr && task->target_data != nullptr) {
 	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
-            KG_TRACE(10,("[SCHEDULER-MT] arg task: %p\n",task->target_data->args[I]));
+            KG_TRACE(50,("[SCHEDULER-MT] arg task: %p\n",task->target_data->args[I]));
             for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
-            KG_TRACE(10,("[SCHEDULER-MT] arg successor: %p\n",successor->target_data->args[J]));
+            KG_TRACE(50,("[SCHEDULER-MT] arg successor: %p\n",successor->target_data->args[J]));
               if (task->target_data->args_base[I] == successor->target_data->args_base[J] && task->target_data->arg_types[I]!=0x120) {//TODO: Should we compare args or args_base?
 
 		

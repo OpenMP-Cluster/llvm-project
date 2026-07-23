@@ -969,14 +969,15 @@ kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_tas
     }
   }
 
+
   kmp_node_info_t *memory_task_info = &(tdg->record_map[memory_taskdata->td_tdg_task_id]);
 
   for(int i = 0; i < memory_task_info->nsuccessors; i++) {
-    KG_TRACE(30, ("successor[%d] = %d\n", i, memory_task_info->successors[i]));
+    KG_TRACE(50, ("successor[%d] = %d\n", i, memory_task_info->successors[i]));
   }
 
-  KG_TRACE(10, ("(create_memory_task) tdg = %p\n", tdg));
-  KG_TRACE(30,("__kmp_create_memory_task (exit)\n"));
+  KG_TRACE(50, ("(create_memory_task) tdg = %p\n", tdg));
+  KG_TRACE(10,("__kmp_create_memory_task (exit)\n"));
   return memory_task;
 }
 
@@ -1562,8 +1563,9 @@ void __kmpc_omp_taskwait_deps_51(ident_t *loc_ref, kmp_int32 gtid,
                 gtid, loc_ref));
 }
 
-void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the related dependencies
-    
+void __kmpc_remove_task(kmp_node_info_t* task_tdg) { 
+  //Remove tasks and the related dependencies in tdg. 
+  //It doesn't impact depnode structure
   KG_TRACE(30,("__kmpc_remove_task (begin)\n"));
 
   kmp_int gtid = __kmp_get_gtid();
@@ -1574,7 +1576,7 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
   kmp_tdg_info_t *tdg = taskdata->tdg;
   
   KG_TRACE(30, ("__kmpc_remove_task: td_task_id=%d\n", taskdata->td_task_id));
-
+ 
   //Removing the task from the successor list of the predecessor
   for ( kmp_int32 idx = 0; idx < task_tdg->npredecessors ; idx++) {  
     kmp_node_info_t *pred_tdg = &tdg->record_map[task_tdg->predecessors[idx]];
@@ -1586,35 +1588,8 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) { //Remove tasks and the rela
         break;
       }
     } 
-    
-    //Removing for kmp_dep_node
-    kmp_task_t *predecessor = pred_tdg->task;  
-    kmp_taskdata_t *taskdata_pred = KMP_TASK_TO_TASKDATA(predecessor);
-    kmp_depnode_t *node_pred = taskdata_pred->td_depnode;
+  }
 
-    // Check mutexinoutset dependencies, release locks
-    if (UNLIKELY(node_pred && (node_pred->dn.mtx_num_locks < 0))) {
-      // negative num_locks means all locks were acquired
-      node_pred->dn.mtx_num_locks = -node_pred->dn.mtx_num_locks;
-      for (int i = node_pred->dn.mtx_num_locks - 1; i >= 0; --i) {
-        KMP_DEBUG_ASSERT(node_pred->dn.mtx_locks[i] != NULL);
-        __kmp_release_lock(node_pred->dn.mtx_locks[i], gtid);
-      }
-    }
-  
-    kmp_depnode_list_t* pred_successors = node_pred->dn.successors;
-    kmp_depnode_list_t* pred_successors_next = node_pred->dn.successors->next;
-
-    while ( pred_successors_next != nullptr && pred_successors_next->next != nullptr && pred_successors_next->node->dn.task != task) {
-      pred_successors = pred_successors_next;
-      pred_successors_next = pred_successors->next;
-    }
-
-    if (pred_successors_next != nullptr) {
-      //Simply remove the link containing the task
-      pred_successors->next = pred_successors_next->next;
-    } 
-  }  
 
   //Removing the successors
   
