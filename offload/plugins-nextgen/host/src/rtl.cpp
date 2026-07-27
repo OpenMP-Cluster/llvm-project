@@ -166,6 +166,9 @@ struct GenELF64DeviceTy : public GenericDeviceTy {
     return *GenELF64Kernel;
   }
 
+  /// ELF64 device returns its device type as CPU_DEVICE
+  DeviceType getDeviceType() const override { return DeviceType::CPU_DEVICE; }
+
   /// Set the current context to this device, which is a no-op.
   Error setContext() override { return Plugin::success(); }
 

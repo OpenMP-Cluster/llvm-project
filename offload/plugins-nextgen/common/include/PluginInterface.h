@@ -873,6 +873,9 @@ struct GenericDeviceTy : public DeviceAllocatorTy {
   Error printInfo();
   virtual Error obtainInfoImpl(InfoQueueTy &Info) = 0;
 
+  /// Get the device type
+  virtual DeviceType getDeviceType() const { return DeviceType::UNKNOWN_DEVICE; }
+
   /// Getters of the grid values.
   uint32_t getWarpSize() const { return GridValues.GV_Warp_Size; }
   uint32_t getThreadLimit() const { return GridValues.GV_Max_WG_Size; }
@@ -1133,6 +1136,11 @@ struct GenericPluginTy {
 
   /// Get the number of active devices.
   int32_t getNumDevices() const { return NumDevices; }
+
+  /// Get the type of an specific device
+  virtual DeviceType getDeviceType(int32_t DeviceID) {
+    return Devices[DeviceID]->getDeviceType();
+  }
 
   /// Get the plugin-specific device identifier.
   int32_t getUserId(int32_t DeviceId) const {

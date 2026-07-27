@@ -711,6 +711,21 @@ struct ProxyDevice {
     co_return (co_await RequestManager);
   }
 
+  EventTy getDeviceType(MPIRequestManagerTy RequestManager) {
+    DeviceType QueryResult = DeviceType::UNKNOWN_DEVICE;
+
+    int32_t PluginId, DeviceId;
+
+    std::tie(PluginId, DeviceId) =
+        EventSystem.mapDeviceId(RequestManager.DeviceId);
+
+    QueryResult = PluginManager.Plugins[PluginId]->getDeviceType(DeviceId);
+
+    RequestManager.send(&QueryResult, sizeof(int), MPI_BYTE);
+
+    co_return (co_await RequestManager);
+  }
+
   EventTy synchronize(MPIRequestManagerTy RequestManager) {
     void *HstAsyncInfoPtr = nullptr;
     bool DeviceOpStatus = true;
@@ -1043,6 +1058,9 @@ struct ProxyDevice {
         break;
       case GET_FUNCTION:
         NewEvent = getFunction(std::move(RequestManager));
+        break;
+      case GET_DEVICE_TYPE:
+        NewEvent = getDeviceType(std::move(RequestManager));
         break;
       case LAUNCH_KERNEL:
         NewEvent = launchKernel(std::move(RequestManager));

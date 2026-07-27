@@ -629,3 +629,12 @@ EXTERN void __tgt_target_memtask(void *HstPtr, int64_t Size, int64_t DstDevice,
   SrcAsyncInfo.synchronize();
   DstAsyncInfo.synchronize();
 }
+
+EXTERN int __tgt_target_get_device_type(int64_t DeviceId) {
+  assert(PM && "Runtime not initialized");
+  auto DeviceOrErr = PM->getDevice(DeviceId);
+  if (!DeviceOrErr)
+    FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
+
+  return DeviceOrErr->getDeviceType();
+}

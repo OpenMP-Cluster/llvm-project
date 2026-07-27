@@ -509,6 +509,9 @@ struct CUDADeviceTy : public GenericDeviceTy {
     return HardwareParallelism;
   }
 
+  /// NVIDIA GPU returns its device type as CUDA_DEVICE
+  DeviceType getDeviceType() const override { return DeviceType::CUDA_DEVICE; }
+
   /// We want to set up the RPC server for host services to the GPU if it is
   /// available.
   bool shouldSetupRPCServer() const override { return true; }

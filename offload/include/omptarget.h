@@ -501,6 +501,8 @@ int __tgt_activate_record_replay(int64_t DeviceId, uint64_t MemorySize,
 void __tgt_target_memtask(void *HstPtr, int64_t Size, int64_t DstDevice,
                           int64_t SrcDevice);
 
+int __tgt_target_get_device_type(int64_t DeviceId);
+
 #ifdef __cplusplus
 }
 #endif

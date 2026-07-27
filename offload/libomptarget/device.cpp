@@ -97,6 +97,11 @@ llvm::Error DeviceTy::init() {
   return llvm::Error::success();
 }
 
+// Get the device type
+DeviceType DeviceTy::getDeviceType() {
+  return RTL->getDeviceType(RTLDeviceID);
+}
+
 // Load binary to device.
 llvm::Expected<__tgt_device_binary>
 DeviceTy::loadBinary(__tgt_device_image *Img) {

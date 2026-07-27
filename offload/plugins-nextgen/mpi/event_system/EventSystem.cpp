@@ -468,6 +468,11 @@ EventTy getFunction(MPIRequestManagerTy RequestManager,
   co_return (co_await RequestManager);
 }
 
+EventTy getDeviceType(MPIRequestManagerTy RequestManager, DeviceType *QueryResult) {
+  RequestManager.receive(QueryResult, sizeof(int), MPI_BYTE);
+  co_return (co_await RequestManager);
+}
+
 EventTy synchronize(MPIRequestManagerTy RequestManager,
                     __tgt_async_info *AsyncInfoPtr) {
   bool DeviceOpStatus = false;

@@ -121,6 +121,13 @@ struct KernelLaunchParamsTy {
   /// Ptrs to the Data entries. Only strictly required for the host plugin.
   void **Ptrs = nullptr;
 };
+
+enum DeviceType {
+  UNKNOWN_DEVICE = 0,
+  CPU_DEVICE,
+  CUDA_DEVICE, // NVIDIA GPUs
+  HSA_DEVICE, // AMD GPUs
+};
 }
 
 #endif // OMPTARGET_SHARED_API_TYPES_H

@@ -2173,6 +2173,9 @@ struct AMDGPUDeviceTy : public GenericDeviceTy, AMDGenericDeviceTy {
     return HardwareParallelism;
   }
 
+  /// AMDGPU returns it device type as HSA_DEVICE
+  DeviceType getDeviceType() const override { return DeviceType::HSA_DEVICE; }
+
   /// We want to set up the RPC server for host services to the GPU if it is
   /// available.
   bool shouldSetupRPCServer() const override { return true; }

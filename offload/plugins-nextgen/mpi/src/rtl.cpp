@@ -507,6 +507,26 @@ struct MPIPluginTy : public GenericPluginTy {
 
   const char *getName() const override { return GETNAME(TARGET_NAME); }
 
+  /// Get the type of an specific device
+  DeviceType getDeviceType(int32_t DeviceId) override {
+    DeviceType QueryResult = DeviceType::UNKNOWN_DEVICE;
+
+    EventTy Event = EventSystem.createEvent(OriginEvents::getDeviceType,
+                                            EventTypeTy::GET_DEVICE_TYPE,
+                                            DeviceId, &QueryResult);
+
+    if (Event.empty()) {
+      DP("Failed to create getDeviceType on Device %d\n", DeviceId);
+    }
+
+    Event.wait();
+    if (auto Err = Event.getError()) {
+      DP("Error querying the getDeviceType on Device %d\n", DeviceId);
+    }
+
+    return QueryResult;
+  }
+
   /// This plugin does not support exchanging data between two devices.
   bool isDataExchangable(int32_t SrcDeviceId, int32_t DstDeviceId) override {
     bool QueryResult = false;
