@@ -1112,8 +1112,8 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
       KA_TRACE(10, ("__kmp_task_finish(exit): T#%d partially done task %p, "
                     "resuming task %p\n",
                     gtid, taskdata, resumed_task));
-      KG_TRACE(30, ("task_finish: taskgroup->count = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
-      KG_TRACE(30, ("task_finish: current_task->td_incomplete_child_tasks = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_incomplete_child_tasks)));
+      KG_TRACE(30, ("task_finish (id: %d): taskgroup->count = %d\n",taskdata->td_task_id, KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
+      KG_TRACE(30, ("task_finish (id: %d): td_incomplete_child_tasks = %d\n",taskdata->td_task_id, KMP_ATOMIC_LD_ACQ(&taskdata->td_parent->td_incomplete_child_tasks)));
       return;
     }
   }
@@ -1222,6 +1222,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
 #endif
           KMP_ATOMIC_DEC(&taskdata->td_parent->td_incomplete_child_tasks);
       KMP_DEBUG_ASSERT(children >= 0);
+
 #if OMPX_TASKGRAPH
       if (taskdata->td_taskgroup && !taskdata->is_taskgraph)
 #else
@@ -1282,9 +1283,9 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
       10, ("__kmp_task_finish(exit): T#%d finished task %p, resuming task %p\n",
            gtid, taskdata, resumed_task));
   
-  KG_TRACE(30, ("task_finish: taskgroup->count = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
+  KG_TRACE(30, ("task_finish (id: %d): taskgroup->count = %d\n",taskdata->td_task_id, KMP_ATOMIC_LD_ACQ(&taskdata->td_taskgroup->count)));
 
-  KG_TRACE(30, ("task_finish: current_task->td_incomplete_child_tasks = %d\n", KMP_ATOMIC_LD_ACQ(&taskdata->td_incomplete_child_tasks)));
+  KG_TRACE(30, ("task_finish (id: %d): current_task->td_incomplete_child_tasks = %d\n", taskdata->td_task_id, KMP_ATOMIC_LD_ACQ(&taskdata->td_parent->td_incomplete_child_tasks)));
   return;
 }
 
@@ -4382,7 +4383,6 @@ void __kmp_task_team_wait(
     kmp_info_t *this_thr,
     kmp_team_t *team USE_ITT_BUILD_ARG(void *itt_sync_obj), int wait) {
   kmp_task_team_t *task_team = team->t.t_task_team[this_thr->th.th_task_state];
-
   KMP_DEBUG_ASSERT(__kmp_tasking_mode != tskm_immediate_exec);
   KMP_DEBUG_ASSERT(task_team == this_thr->th.th_task_team);
 
@@ -5655,8 +5655,10 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   }
 
   // KG_TRACE(10, ("this_num_tasks = %d\n", KMP_ATOMIC_LD_RLX(&tdg->num_tasks)));
-  KG_TRACE(30, ("exec_tdg: taskgroup_count = %d\n", KMP_ATOMIC_LD_ACQ(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count))));
+  KH_TRACE(30, ("exec_tdg: taskgroup_count = %d\n", KMP_ATOMIC_LD_ACQ(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count))));
   KMP_ATOMIC_ST_RLX(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count), 0);
+
+  KH_TRACE(30, ("Number of task in tdg: %d,num normal task:%d, children: %d\n",KMP_ATOMIC_LD_RLX(&tdg->num_tasks),KMP_ATOMIC_LD_RLX(&tdg->num_normal_tasks),KMP_ATOMIC_LD_RLX(&this_record_map[0].parent_task->td_incomplete_child_tasks)));
   for (kmp_int32 j = 0; j < KMP_ATOMIC_LD_RLX(&tdg->num_tasks); j++) {
     kmp_taskdata_t *td = KMP_TASK_TO_TASKDATA(this_record_map[j].task);
 
@@ -5668,8 +5670,10 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
 
     KMP_ATOMIC_ST_RLX(&this_record_map[j].npredecessors_counter,
                       this_record_map[j].npredecessors);
-    KMP_ATOMIC_INC(&this_record_map[j].parent_task->td_incomplete_child_tasks);
-
+    if (!__kmpc_is_rescheduling() || j < KMP_ATOMIC_LD_RLX(&tdg->num_normal_tasks)){
+      int children = 1 + KMP_ATOMIC_INC(&this_record_map[j].parent_task->td_incomplete_child_tasks);
+      KH_TRACE(10, ("Inc number of children: : %d\n",children));
+    }
     if (parent_taskgroup) {
       KMP_ATOMIC_INC(&parent_taskgroup->count);
       int taskgroup_count_gdb = KMP_ATOMIC_LD_ACQ(&parent_taskgroup->count);
@@ -5868,7 +5872,7 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
                             kmp_int32 input_flags, kmp_int32 tdg_id) {
   kmp_tdg_info_t *tdg = __kmp_find_tdg(tdg_id);
 
-  KG_TRACE(10, ("__kmpc_end_record_task(enter): T#%d loc=%p finishes recording"
+  KH_TRACE(10, ("__kmpc_end_record_task(enter): T#%d loc=%p finishes recording"
                 " tdg=%d with flags=%d\n",
                 gtid, loc_ref, tdg_id, input_flags));
 
@@ -5882,8 +5886,8 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
       __kmp_end_record(gtid, tdg);
     }
   }
-
-  KG_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
+  
+  KH_TRACE(10, ("__kmpc_end_record_task(exit): T#%d loc=%p finished recording"
                 " tdg=%d, its status is now READY\n",
                 gtid, loc_ref, tdg_id));
 }
