@@ -4807,7 +4807,8 @@ void __kmpc_reset_scheduler_barrier();
 void __kmpc_scheduler_update_weights();
 void __kmpc_allow_exec();
 
-kmp_int32 __kmpc_get_device_type(kmp_int32 device_id);
+kmp_int32 __kmpc_get_device_type(kmp_int64 device_id);
+int __tgt_target_get_device_type(int64_t DeviceId) __attribute__((weak));
 
 // Maps a task ID to its associated schedule data
 using ScheduleMap = std::unordered_map<kmp_int32, TaskScheduleData>;

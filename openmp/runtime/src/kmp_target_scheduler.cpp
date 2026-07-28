@@ -265,7 +265,8 @@ void __kmpc_free_schedule_maps() {
   // delete schedule_map_list;
 }
 
-kmp_int32 __kmpc_get_device_type(kmp_int32 device_id){
+kmp_int32 __kmpc_get_device_type(kmp_int64 device_id){
+  // return __tgt_target_get_device_type(device_id);
   return 1;
 }
 

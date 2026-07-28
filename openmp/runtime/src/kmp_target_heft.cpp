@@ -518,12 +518,27 @@ void HEFTContext::dump(kmp_int32 NumDevices) {
   // Iterate over tasks
   for (auto const *task_ptr : TasksV) {
     auto &task = *task_ptr;
+    auto *sched_map = get_schedule_map(tdg->tdg_id);
     uint64_t ofid = (uint64_t)task.target_data->outlined_fn_id;
+    auto task_id = KMP_TASKPTR_TO_TASKID(task_ptr);
+    auto it = sched_map->find(task_id);
+    int rank = (it != sched_map->end()) ? it->second.rank : -1; // -1 = "unknown"
+
+    if (it == sched_map->end()) {
+        fprintf(stderr, "Warning: task_id=%d not found in schedule map\n", task_id);
+    }
+
     fprintf(fp,
+            "%04d  0x%08lx  %10.2lf  %10.2lf  %10.2lf  %7d  %7d  %7d  %7d  %4d",
+            task_id, ofid, UpwardRank[&task], AST[&task], AFT[&task],
+            rank, isRootTask(task), isExitTask(task),
+            isTargetDataTask(task), isClassicalTask(task));
+
+   /* fprintf(fp,
             "%04d  0x%08lx  %10.2lf  %10.2lf  %10.2lf  %7d  %7d  %7d  %7d  %4d",
             KMP_TASKPTR_TO_TASKID(task_ptr), ofid, UpwardRank[&task], AST[&task], AFT[&task],
             (*get_schedule_map(tdg->tdg_id))[KMP_TASKPTR_TO_TASKID(task_ptr)].rank, isRootTask(task), isExitTask(task),
-            isTargetDataTask(task), isClassicalTask(task));
+            isTargetDataTask(task), isClassicalTask(task));*/
     for (const auto &Device : Devices)
       fprintf(fp, "  %10.2lf", EST[&task][Device]);
     for (const auto &Device : Devices)
