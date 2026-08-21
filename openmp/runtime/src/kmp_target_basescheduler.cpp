@@ -154,7 +154,6 @@ void BaseScheduler::acquireAndScheduleGraph(kmp_tdg_info_t* tdg) {
     KG_TRACE(10,("acquireAndScheduleGraph: Main Scheduler selected\n"));
     scheduleGraph();
   }
-  scheduling_iteration_counter++;
   isScheduleDone = 1;
   KG_TRACE(10,("acquireAndScheduleGraph Exit\n"));
 }
@@ -496,11 +495,23 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
 }
 
 bool BaseScheduler::is_rescheduling(){
-  if(scheduling_iteration_counter <= initial_iteration || (rescheduling_interval && (scheduling_iteration_counter - initial_iteration) % rescheduling_interval == 0))
+  KG_TRACE(10,("[SCHEDULER]: __kmpc_is_rescheduling iteration %d  \n", scheduling_iteration_counter));
+  if(scheduling_iteration_counter <= initial_iteration || (rescheduling_interval && (scheduling_iteration_counter - initial_iteration) % rescheduling_interval == 0)){
+    KG_TRACE(10,("[SCHEDULER]: __kmpc_is_rescheduling true  \n"));
     return true;
+  }
+  KG_TRACE(10,("[SCHEDULER]: __kmpc_is_rescheduling false  \n"));
   return false;
 }
-  
+
+kmp_int32 BaseScheduler::inc_scheduling_iteration_counter(){
+  return ++scheduling_iteration_counter;
+}
+
+kmp_int32 BaseScheduler::get_scheduling_iteration_counter(){
+  return scheduling_iteration_counter;
+}
+
 void BaseScheduler::dumpTaskGraph() {
   if (graph_dump_dir_path.empty())
     return;

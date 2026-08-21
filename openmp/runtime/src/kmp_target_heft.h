@@ -118,7 +118,6 @@ public:
   /// Indicates how long each task should take to execute after being scheduled on each device.
   using ComputationMap = std::unordered_map<TaskPtr,std::unordered_map<kmp_int32,double>>;
 
-  
   using kmp_device_type = int;
 
   friend class ::HEFTScheduler;
@@ -182,7 +181,7 @@ public:
   void clearCompCost();
 
   /// Construct CompCost Matrix from profiled informations
-  void extrapolateCompCost(kmp_int32 scheduling_iteration_counter, kmp_int32 scheduling_policy, kmp_int32 initial_iteration);
+  void interpolateCompCost(kmp_int32 scheduling_iteration_counter, kmp_int32 scheduling_policy, kmp_int32 initial_iteration);
  
   /// Set a new task map.
   void setTaskMap(kmp_int32 tdg_idx);
@@ -191,11 +190,14 @@ public:
   void dump(kmp_int32 NumDevices);
 
 private:
-  void constructDeviceTypeMap();
+  void buildDeviceTypeMap();
   void computeAvgCompCosts();
   void homogeneousInterpolation();
-  void fastProportionalInterpolation();
-  void generalProportionalInterpolation();
+  void linearInterpolation();
+  void heterogeneousLinearInterpolation();
+  void restrictedLinearInterpolation(ComputationMap, int);
+  void completeheterogeneousInterpolation(); 
+
   /// Compute the earliest start time for a specific (task, rank) pair.
   ///
   /// \returns the computed EST.
@@ -279,8 +281,12 @@ private:
   std::string HEFTLogPath;
   /// Using heterogeneous Interpolation
   bool heterogeneousInterpolation = 0;
-  std::unordered_map<int,kmp_device_type> deviceTypeMap;
   kmp_int32 deviceTypeNumber = 1;
+  std::unordered_map<int,int> deviceTypeMap;
+  std::vector<int> device_restricted_map;
+  std::unordered_map<int,std::vector<int>> restricted_to_device_map;
+  std::vector<ComputationMap> device_restricted_CompCost;
+  kmp_int32 maxIteration = 100;
 };
 
 } // namespace detail

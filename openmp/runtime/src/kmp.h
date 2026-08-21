@@ -4806,6 +4806,8 @@ bool __kmpc_is_rescheduling();
 void __kmpc_reset_scheduler_barrier();
 void __kmpc_scheduler_update_weights();
 void __kmpc_allow_exec();
+kmp_int32 __kmpc_scheduling_iteration_counter();
+kmp_int32 __kmpc_inc_scheduling_iteration_counter();
 
 kmp_int32 __kmpc_get_device_type(kmp_int64 device_id);
 int __tgt_target_get_device_type(int64_t DeviceId) __attribute__((weak));

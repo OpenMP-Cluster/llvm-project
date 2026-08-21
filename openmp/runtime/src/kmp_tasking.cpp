@@ -5642,14 +5642,14 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   kmp_taskdata_t *parent_task = thread->th.th_current_task;
 
   __kmpc_reset_schedule_map(tdg);    
-  if (__kmpc_is_rescheduling()){
+    if (__kmpc_is_rescheduling()){
     __kmpc_scheduler_update_weights();
     __kmpc_scheduleGraph(tdg);
   }
   else{
     __kmpc_allow_exec();
   }
-
+  
   if (tdg->rec_taskred_data) {
     __kmpc_taskred_init(gtid, tdg->rec_num_taskred, tdg->rec_taskred_data);
   }
@@ -5712,7 +5712,7 @@ void __kmp_exec_tdg(kmp_int32 gtid, kmp_tdg_info_t *tdg) {
   for( auto [id,task]: (*get_schedule_map(tdg->tdg_id))) {
     KH_TRACE(10, ("[exec_tdg:] Task %d scheduled on rank %d\n", id, task.rank));
   }
-
+  __kmpc_inc_scheduling_iteration_counter();
 
   for (kmp_int32 j = 0; j < this_num_roots; ++j) {
     __kmp_omp_task(gtid, this_record_map[this_root_tasks[j]].task, true);
@@ -5880,6 +5880,7 @@ void __kmpc_end_record_task(ident_t *loc_ref, kmp_int32 gtid,
     // TODO: use input_flags->nowait
     if (__kmp_tdg_is_recording(tdg->tdg_status)) {
       __kmpc_scheduleGraph(tdg);
+      __kmpc_inc_scheduling_iteration_counter();
     }
     __kmpc_end_taskgroup(loc_ref, gtid);
     if (__kmp_tdg_is_recording(tdg->tdg_status)) {

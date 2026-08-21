@@ -235,12 +235,13 @@ void __kmpc_scheduler_update_weights(){
 }
 
 void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg){
+//FIXME: This should print in a file 
   for ( kmp_int32 tdg_task_id = 0; tdg_task_id < tdg->num_tasks ; tdg_task_id++){
-     KG_TRACE(100,("[Inter HEFT]: Task %d:\n",tdg_task_id));
+    KG_TRACE(10,("[Inter HEFT]: Task %d:\n",tdg_task_id));
     for (kmp_int32 device = 0 ; device < __kmpc_get_num_devices(); device++) {
-     KG_TRACE(100,("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number));
+      KG_TRACE(10,("device %d : value: %d ; iteration number: %d ",device, tdg->record_map[tdg_task_id].task_time[device].mean_time,tdg->record_map[tdg_task_id].task_time[device].iteration_number));
     } 
-     KG_TRACE(100,("\n"));
+    KG_TRACE(10,("\n"));
   }
 }
 
@@ -267,8 +268,14 @@ void __kmpc_free_schedule_maps() {
 
 kmp_int32 __kmpc_get_device_type(kmp_int64 device_id){
   // return __tgt_target_get_device_type(device_id);
-  return 1;
+  return device_id%2;
 }
 
+kmp_int32 __kmpc_scheduling_iteration_counter(){
+  return scheduler->get_scheduling_iteration_counter();
+}
 
+kmp_int32 __kmpc_inc_scheduling_iteration_counter(){
+  return scheduler->inc_scheduling_iteration_counter();
+}
 

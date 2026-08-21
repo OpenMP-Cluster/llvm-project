@@ -98,6 +98,8 @@ public:
   void resetTasksRank();
   void scheduleGraphRR(kmp_int32 offset);
   bool is_rescheduling();
+  kmp_int32 inc_scheduling_iteration_counter();
+  kmp_int32 get_scheduling_iteration_counter();
   void addMemoryTasks();
 
 private:
