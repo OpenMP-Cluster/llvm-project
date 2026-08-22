@@ -648,7 +648,7 @@ void HEFTContext::completeheterogeneousInterpolation(){
     std::vector<int> presence(num_types, -1); // -1 = type not on this task; 0 = missing; 1 = present
     for(auto CC: ComputationCost[Taskptr]) {
       int type = deviceTypeMap.at(CC.first);
-      if (CC.second != -1)
+      if (CC.second >= 0.0)
         presence[type] = 1;
       else if (presence[type] != 1)
         presence[type] = 0;
@@ -706,11 +706,12 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
         ComputationCost[Taskptr][device]= 1.0;
       }
       else {
-        KG_TRACE(10,("[Inter HEFT]: Task %d, device %d : iteration number: %d\n",KMP_TASKPTR_TO_TASKID(Taskptr),device,tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].iteration_number));
+        //KG_TRACE(10,("[Inter HEFT]: Task %d, device %d : iteration number: %d\n",KMP_TASKPTR_TO_TASKID(Taskptr),device,tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].iteration_number));
         if(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].iteration_number) {
           KG_TRACE(10,("[Inter HEFT]: Adding task %d , device %d to CompCost\n",KMP_TASKPTR_TO_TDG_TASKID(Taskptr),device));
           ComputationCost[Taskptr][device]=static_cast<double>(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].mean_time);
 	  if (heterogeneousInterpolation && deviceTypeNumber > 1) {
+	    device_restricted_CompCost[deviceTypeMap[device]][Taskptr][device]=static_cast<double>(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].mean_time);
 	  }
         }
         else { 
@@ -727,21 +728,21 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
 
   if(!is_incomplete_profile || !scheduling_iteration_counter) {
     computeAvgCompCosts();
-    KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end): no need for interpolation\n "));
+    KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end): iteration %d no need for interpolation\n ",scheduling_iteration_counter));
     return;
   }
   
   if (scheduling_iteration_counter == 1) {
     homogeneousInterpolation();
     computeAvgCompCosts();
-    KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end):homogeneous hypothesis\n  "));
+    KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end): iteration %d homogeneous hypothesis\n ", scheduling_iteration_counter));
     return;
   }
 
   if (heterogeneousInterpolation && deviceTypeNumber > 1 && scheduling_iteration_counter > 3 ) {
     heterogeneousLinearInterpolation();
     computeAvgCompCosts();
-    KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end):heterogeneous devices interpolation\n  "));
+    KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end): iteration %d heterogeneous devices interpolation\n ",scheduling_iteration_counter));
     return;
   }
 
@@ -749,7 +750,7 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
   linearInterpolation(); 
   computeAvgCompCosts();
 
-  KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end): homogeneous devices interpolation\n"));
+  KG_TRACE(10,("[Inter HEFT] interpolateCompCost (end): iteration %d homogeneous devices interpolation\n",scheduling_iteration_counter));
 
 }
 
