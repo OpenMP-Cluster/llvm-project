@@ -267,8 +267,7 @@ void __kmpc_free_schedule_maps() {
 }
 
 kmp_int32 __kmpc_get_device_type(kmp_int64 device_id){
-  // return __tgt_target_get_device_type(device_id);
-  return device_id%2;
+  return __tgt_target_get_device_type(device_id);
 }
 
 kmp_int32 __kmpc_scheduling_iteration_counter(){

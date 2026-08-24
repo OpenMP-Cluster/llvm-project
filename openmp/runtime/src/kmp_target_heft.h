@@ -197,7 +197,7 @@ private:
   void heterogeneousLinearInterpolation();
   void restrictedLinearInterpolation(ComputationMap, int);
   void completeheterogeneousInterpolation(); 
-
+  void printCompCostMatrices();
   /// Compute the earliest start time for a specific (task, rank) pair.
   ///
   /// \returns the computed EST.

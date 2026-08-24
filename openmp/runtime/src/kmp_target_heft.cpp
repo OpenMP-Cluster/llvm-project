@@ -447,21 +447,23 @@ for ( int i = 0 ; i < device_restricted_CompCost.size() ; i++){
 }
 
 void HEFTContext::restrictedLinearInterpolation(ComputationMap restrictedComputationCost,int type) {
-//TODO:Limit the iteration number
-//TODO: device_number should be restrictedComputationCost.size() or something like that
-  kmp_int32 device_number = __kmpc_get_num_devices();
+
+  const std::vector<kmp_int32> &device_list = restricted_to_device_map.at(type);
+  kmp_int32 device_number = (kmp_int32)device_list.size();
   std::vector<std::vector<double>> beta(device_number,std::vector<double>(device_number,-1.0)); // We want to compute the betas (proportional coefficient between the devices' speeds)
 
 //Computation of the Betas
 
  for( kmp_int32 device_0 = 0; device_0 < device_number ; device_0++ ) {
   for ( kmp_int32 device_1 = device_0 ; device_1 < device_number ; device_1++){
+    kmp_int32 actual_device_0 = device_list[device_0];
+    kmp_int32 actual_device_1 = device_list[device_1];
     double sum = 0.0;
     kmp_int32 size = 0; 
     for (auto Taskptr : TopologicalOrder(tdg)){
-      if(isTargetDataTask(Taskptr) || !restrictedComputationCost[Taskptr].count(device_0) ||  !restrictedComputationCost[Taskptr].count(device_1))
+      if(isTargetDataTask(Taskptr) || !restrictedComputationCost[Taskptr].count(actual_device_0) ||  !restrictedComputationCost[Taskptr].count(actual_device_1))
         continue; 
-      sum += std::log(restrictedComputationCost[Taskptr][device_1]/restrictedComputationCost[Taskptr][device_0]);  
+      sum += std::log(restrictedComputationCost[Taskptr][actual_device_1]/restrictedComputationCost[Taskptr][actual_device_0]);  
       size++;
       if (size > maxIteration)
         break;
@@ -469,10 +471,10 @@ void HEFTContext::restrictedLinearInterpolation(ComputationMap restrictedComputa
      if(size) {
        beta[device_0][device_1] = std::exp(sum/size) ; 
        beta[device_1][device_0] = 1/beta[device_0][device_1];   
-       KG_TRACE(10,("[HEFT] Getting profile for beta %d, %d: %d\n",device_0, device_1));
+       KG_TRACE(10,("[HEFT] Getting profile for beta %d, %d: %d\n",actual_device_0, actual_device_1));
      }
      else {
-       KG_TRACE(10,("[HEFT] No profile for beta %d, %d\n",device_0, device_1));
+       KG_TRACE(10,("[HEFT] No profile for beta %d, %d\n",actual_device_0, actual_device_1));
      }
    }
  }
@@ -559,36 +561,32 @@ void HEFTContext::restrictedLinearInterpolation(ComputationMap restrictedComputa
     //Copy known profiled costs for the task
     std::unordered_map<kmp_int32, double> profiled_comp_cost;  
     kmp_int32 size = 0;    
-    for(auto CC: restrictedComputationCost[Taskptr]) {
-      if ( CC.second < 0.0)
-        continue; 
-      profiled_comp_cost[CC.first] = CC.second;
+    for( kmp_int32 device_0 = 0; device_0 < device_number ; device_0++ ) {
+      kmp_int32 actual_device_0 = device_list[device_0];
+      auto it = restrictedComputationCost[Taskptr].find(actual_device_0);
+      if (it == restrictedComputationCost[Taskptr].end() || it->second < 0.0)
+        continue;
+      profiled_comp_cost[device_0] = it->second;
       size++;
     }
     for( kmp_int32 device_0 = 0; device_0 < device_number ; device_0++ ) {
+      kmp_int32 actual_device_0 = device_list[device_0];
       //We find a pair (task,device) that was not profiled
-      if(restrictedComputationCost[Taskptr].count(device_0))
+      if(restrictedComputationCost[Taskptr].count(actual_device_0))
         continue;
       //We take the average of all the path from the tasks that were profiled 
       double sum  = 0.0;
       for(auto [profiled_device, profiled_value]: profiled_comp_cost) {
         sum += std::log(profiled_value* beta[profiled_device][device_0]);
       }
-      ComputationCost[Taskptr][restricted_to_device_map[type][device_0]]= size > 0 ? std::exp(sum/size) : ComputationCost[Taskptr][restricted_to_device_map[type][device_0]];
+      ComputationCost[Taskptr][actual_device_0]= size > 0 ? std::exp(sum/size) : ComputationCost[Taskptr][actual_device_0];
     }
   }
 }
 
 void HEFTContext::completeheterogeneousInterpolation(){
 
-  std::unordered_map<kmp_int32, kmp_int32> rawTypeToIndex; // raw type id -> compact index
-  kmp_int32 device_number = __kmpc_get_num_devices();
   int num_types = deviceTypeNumber;
-  
-  for (kmp_int32 device = 0; device < device_number; ++device) {
-    int rawType = deviceTypeMap.at(device);
-    rawTypeToIndex.try_emplace(rawType, (int)rawTypeToIndex.size());
-  }
 
   double mean = 1.0;
   std::vector<double> coef(deviceTypeNumber, 1.0);
@@ -677,13 +675,57 @@ void HEFTContext::completeheterogeneousInterpolation(){
   }
 }
 
+void HEFTContext::printCompCostMatrices() {
+  kmp_int32 device_number = __kmpc_get_num_devices();
+
+  KG_TRACE(10, ("[Inter HEFT] ---- ComputationCost matrix (task x device) ----\n"));
+  for (auto Taskptr : TopologicalOrder(tdg)) {
+    std::string row = "[Inter HEFT] Task " +
+                       std::to_string(KMP_TASKPTR_TO_TASKID(Taskptr)) + ": ";
+    for (kmp_int32 device = 0; device < device_number; device++) {
+      auto it = ComputationCost[Taskptr].find(device);
+      row += "d" + std::to_string(device) + "=";
+      row += (it != ComputationCost[Taskptr].end())
+                 ? std::to_string(it->second)
+                 : std::string("-");
+      row += "  ";
+    }
+    KG_TRACE(10, ("%s\n", row.c_str()));
+  }
+
+  if (!heterogeneousInterpolation || deviceTypeNumber <= 1)
+    return;
+
+  for (int type = 0; type < deviceTypeNumber; type++) {
+    KG_TRACE(10, ("[Inter HEFT] ---- device_restricted_CompCost[type=%d] "
+                  "(task x device) ----\n", type));
+    if (device_restricted_CompCost[type].empty()) {
+      KG_TRACE(10, ("[Inter HEFT]   (empty)\n"));
+      continue;
+    }
+    for (auto &TaskEntry : device_restricted_CompCost[type]) {
+      std::string row = "[Inter HEFT] Task " +
+                         std::to_string(KMP_TASKPTR_TO_TASKID(TaskEntry.first)) +
+                         ": ";
+      for (kmp_int32 device = 0; device < device_number; device++) {
+        auto it = TaskEntry.second.find(device);
+        row += "d" + std::to_string(device) + "=";
+        row += (it != TaskEntry.second.end()) ? std::to_string(it->second)
+                                               : std::string("-");
+        row += "  ";
+      }
+      KG_TRACE(10, ("%s\n", row.c_str()));
+    }
+  }
+}
+
 void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, kmp_int32 scheduling_policy, kmp_int32 initial_iteration) {
   //TODO: Can we decorolate it from HEFTContext?
   KG_TRACE(10,("[HEFT] interpolateCompCost (start): heterogeneous: %d, device type number: %d \n",heterogeneousInterpolation, deviceTypeNumber));
   __kmpc_print_profiled_comp_cost(tdg);
   if (heterogeneousInterpolation && deviceTypeNumber > 1) {
-    device_restricted_CompCost.clear();
-    restricted_to_device_map.clear();
+    for (auto &typeMap : device_restricted_CompCost)
+      typeMap.clear();
   }
 
   bool is_incomplete_profile = false; 
@@ -696,18 +738,13 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
         if (it == deviceTypeMap.end()) {
           KG_TRACE(10, ("[Inter HEFT]: device (id %d) : type not found in device type map\n", device));
         }
-	device_restricted_map.push_back(type);
-	if(restricted_to_device_map.count(type) == 0)
-	  restricted_to_device_map[type] = std::vector<int>();
-        restricted_to_device_map.at(type).push_back(device);
+        KMP_DEBUG_ASSERT((size_t)type < device_restricted_CompCost.size()); // canary
       }
 
       if(isTargetDataTask(*Taskptr)) { 
         ComputationCost[Taskptr][device]= 1.0;
       }
       else {
-        //KG_TRACE(10,("[Inter HEFT]: Task %d, device %d : iteration number: %d\n",KMP_TASKPTR_TO_TASKID(Taskptr),device,tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].iteration_number));
-        if(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].iteration_number) {
           KG_TRACE(10,("[Inter HEFT]: Adding task %d , device %d to CompCost\n",KMP_TASKPTR_TO_TDG_TASKID(Taskptr),device));
           ComputationCost[Taskptr][device]=static_cast<double>(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].mean_time);
 	  if (heterogeneousInterpolation && deviceTypeNumber > 1) {
@@ -723,7 +760,8 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
       }
     }
   }
-  
+ 
+ printCompCostMatrices(); 
  //We could simplify these ifs with a switch into computeAvgCompCosts()
 
   if(!is_incomplete_profile || !scheduling_iteration_counter) {
@@ -757,12 +795,29 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
 
 void HEFTContext::buildDeviceTypeMap(){
   //TODO: Do we want to merge it with DeviceList?
-  std::unordered_map<kmp_device_type,int> device_type_count;
-  for (int device = 0; device < __kmpc_get_num_devices(); device++) {
-    deviceTypeMap[device] = __kmpc_get_device_type(device);
-    device_type_count[deviceTypeMap[device]]++;     
+  deviceTypeMap.clear();
+  device_restricted_map.clear();
+  restricted_to_device_map.clear();
+  device_restricted_CompCost.clear();
+
+  kmp_int32 num_devices = __kmpc_get_num_devices();
+  device_restricted_map.resize(num_devices);
+
+  std::unordered_map<kmp_device_type,int> rawTypeToIndex; 
+
+  for (int device = 0; device < num_devices; device++) {
+    kmp_device_type rawType = __kmpc_get_device_type(device);
+    auto it_inserted = rawTypeToIndex.try_emplace(rawType, (int)rawTypeToIndex.size());
+    int type = it_inserted.first->second;
+
+    deviceTypeMap[device] = type;       
+    device_restricted_map[device] = type;
+    restricted_to_device_map[type].push_back(device);
   }
-  deviceTypeNumber = device_type_count.size();
+
+  deviceTypeNumber = (kmp_int32)rawTypeToIndex.size();
+  device_restricted_CompCost.resize(deviceTypeNumber); 
+  KMP_DEBUG_ASSERT(device_restricted_CompCost.size() == (size_t)deviceTypeNumber);
 }
 
 /// Dump internal HEFT information to a file.
@@ -1097,4 +1152,3 @@ void HEFTScheduler::dumpTaskGraph() {
 void HEFTScheduler::resetWeight(){
   Ctx.clearCompCost();
 }
-
