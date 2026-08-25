@@ -745,6 +745,7 @@ void HEFTContext::interpolateCompCost(kmp_int32 scheduling_iteration_counter, km
         ComputationCost[Taskptr][device]= 1.0;
       }
       else {
+        if(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].iteration_number) {
           KG_TRACE(10,("[Inter HEFT]: Adding task %d , device %d to CompCost\n",KMP_TASKPTR_TO_TDG_TASKID(Taskptr),device));
           ComputationCost[Taskptr][device]=static_cast<double>(tdg->record_map[KMP_TASKPTR_TO_TDG_TASKID(Taskptr)].task_time[device].mean_time);
 	  if (heterogeneousInterpolation && deviceTypeNumber > 1) {
