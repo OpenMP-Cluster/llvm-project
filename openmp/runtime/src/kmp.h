@@ -560,6 +560,8 @@ enum _reduction_method {
   empty_reduce_block = (4 << 8)
 };
 
+
+
 // Description of the packed_reduction_method variable:
 // The packed_reduction_method variable consists of two enum types variables
 // that are packed together into 0-th byte and 1-st byte:
@@ -4743,6 +4745,7 @@ struct kmp_target_dep {
 struct kmp_target_task {
   kmp_int32 task_id; // Task id from taskdata structure
   bool is_target_task; // Set if task represents a target region
+  kmp_task_t *task = nullptr; // Underlying OpenMP task
   kmp_target_task_data_t target_data; // Target data from taskdata structure
 
   kmp_int32 num_deps; // Number of dependencies passed to this task
@@ -4752,6 +4755,29 @@ struct kmp_target_task {
   kmp_target_task_list_node_t *predecessors; // Predecessors in the task graph
   kmp_int32 num_predecessors; // Number of direct predecessors
 };
+
+struct kmp_target_task_map {
+  kmp_target_task_t *tasks; // Current tasks array
+  kmp_int32 num_tasks; // Number of current tasks
+
+  kmp_target_task_t **roots; // Pointer to root tasks in the tasks array
+  kmp_int32 num_roots; // Number of root tasks
+};
+
+kmp_target_task_map_t *__kmpc_target_task_map_create();
+
+void __kmpc_target_task_map_free(kmp_target_task_map_t *task_map);
+
+kmp_target_task_t *__kmpc_target_task_map_get(
+    kmp_target_task_map_t *task_map, kmp_int32 task_id);
+
+void __kmpc_add_target_task_with_deps(
+    const kmp_taskdata_t *taskdata, kmp_int32 ndeps,
+    const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
+    const kmp_depend_info_t *dep_list_noalias);
+
+void __kmpc_remove_root_target_task(kmp_int32 task_id);
+
 
 // Functions used by the OpenMP Runtime to manage target tasks.
 // =============================================================================
@@ -4763,6 +4789,9 @@ struct kmp_target_task {
 //          valid OpenMP thread or if it is not executing an explicit task, the
 //          function will return -1.
 kmp_int32 __kmpc_target_task_current_task_id();
+
+bool __kmpc_is_graph_builder_tasking();
+bool __kmpc_has_active_tasks();
 
 // Helpers
 struct LifetimeInc {
@@ -4790,6 +4819,12 @@ KMP_EXPORT void __kmpc_setTaskStateWithDevice(int32_t task_id, int device_id,
 KMP_EXPORT kmp_target_dep __kmpc_getDep(int32_t task_id, int64_t addr);
 KMP_EXPORT void __kmpc_dumpTaskGraph();
 KMP_EXPORT const void *__kmpc_GetCurrentOutlinedFnID();
+KMP_EXPORT void __kmpc_dmdas_target_dispatched(int32_t task_id);
+KMP_EXPORT int32_t
+__kmpc_dmdas_get_task_device(int32_t task_id);
+KMP_EXPORT void __kmpc_dmdas_record_kernel_time(
+    int32_t task_id,
+    double kernel_time);
 
 int __kmpc_get_num_devices();
 int omp_get_num_devices(void) __attribute__((weak));
@@ -4798,12 +4833,17 @@ int omp_get_initial_device(void) __attribute__((weak));
 
 //Main scheduling function: Retrieve and schedule the taskgraph if needed
 void __kmpc_scheduleGraph(kmp_tdg_info_t* tdg);
+bool __kmpc_is_legacy_scheduler();
+bool __kmpc_legacy_is_target_data_task(int32_t task_id);
+void __kmpc_scheduleLegacyGraph();
+void __kmpc_acquireGraphOnly(kmp_tdg_info_t *tdg);
 void __kmpc_reset_schedule_map(kmp_tdg_info_t* tdg);  
 void __kmpc_waitScheduleGraph();
 kmp_int32 __kmpc_get_task_device(kmp_int32 task_id);
 
 bool __kmpc_is_rescheduling();
 void __kmpc_reset_scheduler_barrier();
+void __kmpc_reset_legacy_scheduler_owner();
 void __kmpc_scheduler_update_weights();
 void __kmpc_allow_exec();
 kmp_int32 __kmpc_scheduling_iteration_counter();
@@ -4826,6 +4866,22 @@ kmp_int32 __kmpc_curr_tdg_idx();
 void __kmpc_free_schedule_maps();
 
 void  __kmpc_remove_task(kmp_node_info_t*); //Remove tasks and the related dependencies
+
+kmp_task_t *__kmp_alloc_memory_task(
+    kmp_int32 gtid,
+    int source_device,
+    int target_device,
+    void *dep_addr,
+    size_t size_addr);
+
+kmp_task_t *__kmp_insert_legacy_memory_task(
+    kmp_int32 gtid,
+    kmp_task_t *source,
+    kmp_task_t *target,
+    int source_device,
+    int target_device,
+    void *dep_addr,
+    size_t size_addr);
 
 kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph);
 #endif
@@ -5143,5 +5199,10 @@ template <typename T1, typename T2>
 static inline void __kmp_type_convert(T1 src, T2 *dest) {
   *dest = kmp_convert<T1, T2>::to(src);
 }
+
+extern void __kmp_execute_task_direct(
+    kmp_int32 gtid,
+    kmp_task_t *task,
+    kmp_taskdata_t *current_task);
 
 #endif /* KMP_H */

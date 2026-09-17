@@ -77,6 +77,7 @@ public:
 
   void acquireAndScheduleGraph(kmp_tdg_info_t* tdg);
   void acquireAndScheduleGraphRR(kmp_tdg_info_t* tdg, kmp_int32 offset);
+  void acquireGraphOnly(kmp_tdg_info_t *tdg);
   kmp_int32 scheduleTask(kmp_int32 task_id);
   kmp_int32 get_scheduleTask(kmp_int32 task_id);
   void pinTask(kmp_int32 task_id, kmp_int32 DeviceId);

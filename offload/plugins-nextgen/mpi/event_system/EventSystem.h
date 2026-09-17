@@ -257,6 +257,7 @@ public:
   /// Target peer to send and receive messages
   int OtherRank;
 
+
   /// Target device in OtherRank
   int DeviceId;
 
@@ -492,6 +493,9 @@ private:
   bool destroyLocalMPIContext();
 
 public:
+
+
+  int getLocalRank() const { return LocalRank; }
   EventSystemTy();
   ~EventSystemTy();
 

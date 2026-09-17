@@ -1506,10 +1506,13 @@ Error GenericDeviceTy::dataSubmit(void *TgtPtr, const void *HstPtr,
 
 Error GenericDeviceTy::dataRetrieve(void *HstPtr, const void *TgtPtr,
                                     int64_t Size, __tgt_async_info *AsyncInfo) {
+
   AsyncInfoWrapperTy AsyncInfoWrapper(*this, AsyncInfo);
 
   auto Err = dataRetrieveImpl(HstPtr, TgtPtr, Size, AsyncInfoWrapper);
+
   AsyncInfoWrapper.finalize(Err);
+
   return Err;
 }
 
@@ -1990,8 +1993,17 @@ int32_t GenericPluginTy::data_retrieve(int32_t DeviceId, void *HstPtr,
 int32_t GenericPluginTy::data_retrieve_async(int32_t DeviceId, void *HstPtr,
                                              void *TgtPtr, int64_t Size,
                                              __tgt_async_info *AsyncInfoPtr) {
-  auto Err =
-      getDevice(DeviceId).dataRetrieve(HstPtr, TgtPtr, Size, AsyncInfoPtr);
+
+
+
+
+GenericDeviceTy &Device = getDevice(DeviceId);
+
+auto Err =
+    Device.dataRetrieve(HstPtr, TgtPtr, Size, AsyncInfoPtr);
+
+  // auto Err =
+  //    getDevice(DeviceId).dataRetrieve(HstPtr, TgtPtr, Size, AsyncInfoPtr);
   if (Err) {
     REPORT("Failure to copy data from device to host. Pointers: host "
            "= " DPxMOD ", device = " DPxMOD ", size = %" PRId64 ": %s\n",

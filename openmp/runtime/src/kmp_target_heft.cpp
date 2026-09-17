@@ -939,6 +939,9 @@ void HEFTScheduler::scheduleGraph() {
   auto NumDevices = __kmpc_get_num_devices();
   auto Devices = Ctx.buildDeviceList(NumDevices);
 
+
+
+
   KG_TRACE(10,("[HEFT] Number of devices: %d\n",NumDevices));
   while (not PQueue.empty()) {
     const auto *Task = PQueue.front().first;
@@ -967,8 +970,12 @@ void HEFTScheduler::scheduleGraph() {
       continue;
     }
 
+
+
     for (const auto &Device : Devices)
       Ctx.computeEFT(Task, Device);
+
+
 
     Ctx.scheduleTaskOnBestRank(Task);
   }

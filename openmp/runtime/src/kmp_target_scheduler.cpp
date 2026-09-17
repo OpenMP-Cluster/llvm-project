@@ -16,6 +16,7 @@
 #include "kmp_target_heft.h"
 #include "kmp_target_graph_roundrobin.h"
 #include "kmp_target_roundrobin.h"
+#include "kmp_target_legacy_heft.h"
 
 static kmp_int32 num_devices = -1;
 
@@ -32,11 +33,14 @@ static const char *allowed_schedulers[] = {
     "roundrobin",
     "graph_roundrobin",
     "heft",
+    "heft_legacy",
 };
 
 // Scheduler global state
-static BaseScheduler *scheduler;
-
+// static BaseScheduler *scheduler;
+static BaseScheduler *scheduler = nullptr;
+static LegacyBaseScheduler *legacy_scheduler = nullptr;
+static bool use_legacy_scheduler = false;
 
 // Schedule Map for each tdg
 
@@ -68,7 +72,7 @@ void __kmpc_InitScheduler() {
   static std::mutex init_mtx;
   std::unique_lock<std::mutex> init_lk(init_mtx);
 
-  if (scheduler != nullptr) {
+  if (scheduler != nullptr || legacy_scheduler != nullptr) {
     return;
   }
    
@@ -86,6 +90,10 @@ void __kmpc_InitScheduler() {
   } else if (sched_str == "heft") {
     KG_TRACE(10,("[SCHEDULER] Creating HEFT scheduler\n"));
     scheduler = new HEFTScheduler();
+  } else if (sched_str == "heft_legacy") {
+    KG_TRACE(10,("[SCHEDULER] Creating legacy HEFT scheduler\n"));
+    use_legacy_scheduler = true;
+    legacy_scheduler = new LegacyHEFTScheduler();
   } else {
     if (sched_str != "") {
       WarnUnknownScheduler(sched_str);
@@ -96,10 +104,34 @@ void __kmpc_InitScheduler() {
 }
 
 void __kmpc_DeinitScheduler() {
+  if (legacy_scheduler != nullptr) {
+    KG_TRACE(10,("[SCHEDULER] Deinit legacy scheduler\n"));
+    delete legacy_scheduler;
+    legacy_scheduler = nullptr;
+  }
+
   if (scheduler != nullptr) {
     KG_TRACE(10,("[SCHEDULER] Deinit scheduler\n"));
     delete scheduler;
+    scheduler = nullptr;
   }
+
+  use_legacy_scheduler = false;
+}
+
+bool __kmpc_is_legacy_scheduler() {
+  if (scheduler == nullptr && legacy_scheduler == nullptr) {
+    __kmpc_InitScheduler();
+  }
+
+  return use_legacy_scheduler;
+}
+
+bool __kmpc_legacy_is_target_data_task(int32_t task_id) {
+  if (!use_legacy_scheduler || legacy_scheduler == nullptr)
+    return false;
+
+  return legacy_scheduler->isTargetDataTask(task_id);
 }
 
 void __kmpc_scheduleGraph(kmp_tdg_info_t* tdg) {
@@ -117,6 +149,51 @@ KG_TRACE(10,("__kmpc_scheduleGraph Start\n"));
   return;
 }
 
+void __kmpc_scheduleLegacyGraph() {
+
+  if (legacy_scheduler == nullptr) {
+    __kmpc_InitScheduler();
+  }
+
+  if (!__kmpc_has_active_tasks()) {
+  if (use_legacy_scheduler && legacy_scheduler != nullptr) {
+    legacy_scheduler->scheduler_mtx.lock();
+
+    if (!__kmpc_has_active_tasks())
+      legacy_scheduler->resetSchedulingThread();
+
+    legacy_scheduler->scheduler_mtx.unlock();
+  }
+
+  return;
+}
+
+  if (!use_legacy_scheduler || legacy_scheduler == nullptr) {
+    return;
+  }
+
+  kmp_int gtid = __kmp_get_gtid();
+
+  kmp_int tid = __kmp_get_tid();
+
+  legacy_scheduler->scheduler_mtx.lock();
+  legacy_scheduler->setSchedulingThread(gtid);
+  bool winner = legacy_scheduler->isSchedulingThread(gtid);
+  legacy_scheduler->scheduler_mtx.unlock();
+
+
+
+  if (winner) {
+
+    LegacyBaseScheduler::LockGuard SchLk(legacy_scheduler);
+    legacy_scheduler->acquireAndScheduleGraph();
+
+    return;
+  }
+
+  legacy_scheduler->waitScheduleGraph();
+}
+
 bool __kmpc_is_rescheduling(){
   return scheduler->is_rescheduling();  
 }
@@ -132,9 +209,17 @@ void __kmpc_waitScheduleGraph(){
 
 int32_t __kmpc_scheduleTask(int32_t task_id) {
   KG_TRACE(90,("__kmpc_scheduleTask Start\n"));
-  if (scheduler == nullptr) {
+
+  if (scheduler == nullptr && legacy_scheduler == nullptr) {
     __kmpc_InitScheduler();
   }
+
+  if (use_legacy_scheduler) {
+    LegacyBaseScheduler::LockGuard SchLk(legacy_scheduler);
+    KG_TRACE(90,("__kmpc_scheduleTask End (legacy)\n"));
+    return legacy_scheduler->scheduleTask(task_id);
+  }
+
   BaseScheduler::LockGuard SchLk(scheduler);
   KG_TRACE(90,("__kmpc_scheduleTask End\n"));
   return scheduler->scheduleTask(task_id);
@@ -152,6 +237,18 @@ kmp_int32 __kmpc_get_task_device(kmp_int32 task_id) {
 
 void __kmpc_pinTask(int32_t task_id, int DeviceId) {
   KG_TRACE(90,("__kmpc_pinTask Start\n"));
+
+  if (scheduler == nullptr && legacy_scheduler == nullptr) {
+    __kmpc_InitScheduler();
+  }
+
+  if (use_legacy_scheduler) {
+    LegacyBaseScheduler::LockGuard SchLk(legacy_scheduler);
+    legacy_scheduler->pinTask(task_id, DeviceId);
+    KG_TRACE(90,("__kmpc_pinTask End (legacy)\n"));
+    return;
+  }
+
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->pinTask(task_id, DeviceId);
   KG_TRACE(90,("__kmpc_pinTask End\n"));
@@ -159,6 +256,19 @@ void __kmpc_pinTask(int32_t task_id, int DeviceId) {
 
 void __kmpc_setTaskState(int32_t task_id, TaskState new_state) {
   KG_TRACE(90,("__kmpc_setTaskState Start\n"));
+
+  if (scheduler == nullptr && legacy_scheduler == nullptr) {
+    __kmpc_InitScheduler();
+  }
+
+  if (use_legacy_scheduler) {
+    LegacyBaseScheduler::LockGuard SchLk(legacy_scheduler);
+    legacy_scheduler->setTaskState(
+        task_id, static_cast<LegacyTaskState>(new_state));
+    KG_TRACE(90,("__kmpc_setTaskState End (legacy)\n"));
+    return;
+  }
+
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->setTaskState(task_id, new_state);
   KG_TRACE(90,("__kmpc_setTaskState End\n"));
@@ -169,7 +279,20 @@ void __kmpc_setTaskStateWithDevice(int32_t task_id, int device_id,
   KG_TRACE(90,("__kmpc_setTaskStateWithDevice Start\n"));
   BaseScheduler::LockGuard SchLk(scheduler);
   scheduler->setTaskState(task_id, device_id, new_state);
+
   KG_TRACE(90,("__kmpc_setTaskStateWithDevice End\n"));
+}
+
+void __kmpc_acquireGraphOnly(kmp_tdg_info_t *tdg) {
+  if (scheduler == nullptr) {
+    __kmpc_InitScheduler();
+  }
+
+  BaseScheduler::LockGuard SchLk(scheduler);
+
+
+
+  scheduler->acquireGraphOnly(tdg);
 }
 
 kmp_target_dep __kmpc_getDep(int32_t task_id, int64_t addr) {
@@ -194,15 +317,30 @@ const void *__kmpc_GetCurrentOutlinedFnID() {
   return ScheduleData.task->target_data->outlined_fn_id;
 }
 
-void __kmpc_reset_scheduler_barrier(){
-  KG_TRACE(90,(" __kmpc_reset_scheduler_barrier Start\n"));
-  if (scheduler == nullptr) {
+void __kmpc_reset_legacy_scheduler_owner() {
+  if (!use_legacy_scheduler || legacy_scheduler == nullptr)
+    return;
+
+  LegacyBaseScheduler::LockGuard SchLk(legacy_scheduler);
+  legacy_scheduler->resetSchedulingThread();
+}
+
+void __kmpc_reset_scheduler_barrier() {
+  if (scheduler == nullptr && legacy_scheduler == nullptr) {
     __kmpc_InitScheduler();
-  } 
- BaseScheduler::LockGuard SchLk(scheduler);
- scheduler->setIsScheduleDone(0);
- scheduler->resetSchedulingThread();
- KG_TRACE(90,(" __kmpc_reset_scheduler_barrier End\n"));
+  }
+
+  if (use_legacy_scheduler) {
+
+    LegacyBaseScheduler::LockGuard SchLk(legacy_scheduler);
+    legacy_scheduler->setIsScheduleDone(false);
+    legacy_scheduler->resetSchedulingThread();
+    return;
+  }
+
+  BaseScheduler::LockGuard SchLk(scheduler);
+  scheduler->setIsScheduleDone(false);
+  scheduler->resetSchedulingThread();
 }
 
 void __kmpc_allow_exec(){

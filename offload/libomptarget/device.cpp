@@ -170,8 +170,16 @@ int32_t DeviceTy::retrieveData(void *HstPtrBegin, void *TgtPtrBegin,
           DeviceID, TgtPtrBegin, omp_get_initial_device(), HstPtrBegin, Size,
           /*CodePtr=*/OMPT_GET_RETURN_ADDRESS);)
 
-  return RTL->data_retrieve_async(RTLDeviceID, HstPtrBegin, TgtPtrBegin, Size,
-                                  AsyncInfo);
+
+
+
+int32_t Ret =
+    RTL->data_retrieve_async(RTLDeviceID, HstPtrBegin,
+                             TgtPtrBegin, Size, AsyncInfo);
+
+
+
+return Ret;
 }
 
 // Copy data from current device to destination device directly
@@ -270,14 +278,12 @@ int32_t DeviceTy::destroyEvent(void *Event) {
 }
 
 void DeviceTy::dumpOffloadEntries() {
-  fprintf(stderr, "Device %i offload entries:\n", DeviceID);
   for (auto &It : *DeviceOffloadEntries.getExclusiveAccessor()) {
     const char *Kind = "kernel";
     if (It.second.isLink())
       Kind = "link";
     else if (It.second.isGlobal())
       Kind = "global var.";
-    fprintf(stderr, "  %11s: %s\n", Kind, It.second.getNameAsCStr());
   }
 }
 

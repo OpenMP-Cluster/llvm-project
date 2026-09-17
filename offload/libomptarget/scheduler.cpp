@@ -20,21 +20,48 @@
 // =============================================================================
 
 int Schedule(ident_t *Loc, int DeviceId) {
-
-  DP("[SCHEDULER] Asked to schedule for Device%d (start)\n",DeviceId);
+  DP("[SCHEDULER] Asked to schedule for Device%d (start)\n", DeviceId);
 
   const int32_t TaskId = __kmpc_target_task_current_task_id();
-  DP("[SCHEDULER] Asked to schedule for Device %d task id : %d\n",DeviceId, TaskId);
 
-  // Acquire the scheduled device id.
-  int ScheduledDevId = __kmpc_scheduleTask(TaskId);
-  DP("[SCHEDULER] Asked to schedule for Device %d task id : %d; scheduled Device: %d\n",DeviceId, TaskId, ScheduledDevId);
+  int ScheduledDevId = -1;
+  bool DMDASOwned = false;
 
-  if (TaskId != -1) {
-    __kmpc_setTaskState(TaskId, TaskState::DISPATCHED);
+
+
+  if (__kmpc_dmdas_get_task_device) {
+    ScheduledDevId =
+        __kmpc_dmdas_get_task_device(TaskId);
+
+    if (ScheduledDevId >= 0)
+      DMDASOwned = true;
   }
 
-  DP("[SCHEDULER] Asked to schedule for Device%d (end)\n",DeviceId);
+
+
+  if (!DMDASOwned) {
+
+
+    ScheduledDevId =
+        __kmpc_scheduleTask(TaskId);
+  }
+
+  if (TaskId != -1) {
+
+
+
+    if (!DMDASOwned) {
+      __kmpc_setTaskState(
+          TaskId,
+          TaskState::DISPATCHED);
+    }
+
+    if (__kmpc_dmdas_target_dispatched)
+      __kmpc_dmdas_target_dispatched(TaskId);
+
+
+  }
+
   return ScheduledDevId;
 }
 
@@ -48,18 +75,50 @@ void PinTask(ident_t *Loc, int DeviceId) {
 }
 
 void MarkExecutedTask() {
-  // Non-mpi-target devices were not scheduled.
   const int32_t TaskId = __kmpc_target_task_current_task_id();
-  if (TaskId != -1) {
-    __kmpc_setTaskState(TaskId, TaskState::EXECUTED);
+
+  if (TaskId == -1)
+    return;
+
+  bool DMDASOwned = false;
+
+  if (__kmpc_dmdas_get_task_device) {
+    const int DMDASDevice =
+        __kmpc_dmdas_get_task_device(TaskId);
+
+    DMDASOwned = DMDASDevice >= 0;
   }
+
+
+
+  if (!DMDASOwned) {
+    __kmpc_setTaskState(
+        TaskId,
+        TaskState::EXECUTED);
+  }
+
+
 }
 
 void MarkExecutedPinnedTask(const DeviceTy &Device) {
   const int32_t TaskId = __kmpc_target_task_current_task_id();
-  if (TaskId != -1) {
-    // We must have the scheduler initialized up to this point.
-    __kmpc_setTaskState(TaskId, TaskState::EXECUTED);
+
+  if (TaskId == -1)
+    return;
+
+  bool DMDASOwned = false;
+
+  if (__kmpc_dmdas_get_task_device) {
+    const int DMDASDevice =
+        __kmpc_dmdas_get_task_device(TaskId);
+
+    DMDASOwned = DMDASDevice >= 0;
+  }
+
+  if (!DMDASOwned) {
+    __kmpc_setTaskState(
+        TaskId,
+        TaskState::EXECUTED);
   }
 }
 

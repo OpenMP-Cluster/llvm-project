@@ -222,13 +222,19 @@ EXTERN int omp_target_memcpy(void *Dst, const void *Src, size_t Length,
   void *SrcAddr = (char *)const_cast<void *>(Src) + SrcOffset;
   void *DstAddr = (char *)Dst + DstOffset;
 
-  if (SrcDevice == omp_get_initial_device() &&
-      DstDevice == omp_get_initial_device()) {
+
+
+int InitialDevice = omp_get_initial_device();
+
+
+
+if (SrcDevice == InitialDevice &&
+    DstDevice == InitialDevice) {
     DP("copy from host to host\n");
     const void *P = memcpy(DstAddr, SrcAddr, Length);
     if (P == NULL)
       Rc = OFFLOAD_FAIL;
-  } else if (SrcDevice == omp_get_initial_device()) {
+  } else if (SrcDevice == InitialDevice) {
     DP("copy from host to device\n");
     auto DstDeviceOrErr = PM->getDevice(DstDevice);
     if (!DstDeviceOrErr)
@@ -236,7 +242,7 @@ EXTERN int omp_target_memcpy(void *Dst, const void *Src, size_t Length,
                     toString(DstDeviceOrErr.takeError()).c_str());
     AsyncInfoTy AsyncInfo(*DstDeviceOrErr);
     Rc = DstDeviceOrErr->submitData(DstAddr, SrcAddr, Length, AsyncInfo);
-  } else if (DstDevice == omp_get_initial_device()) {
+  } else if (DstDevice == InitialDevice) {
     DP("copy from device to host\n");
     auto SrcDeviceOrErr = PM->getDevice(SrcDevice);
     if (!SrcDeviceOrErr)
@@ -265,16 +271,29 @@ EXTERN int omp_target_memcpy(void *Dst, const void *Src, size_t Length,
         return OFFLOAD_SUCCESS;
     }
 
+
+
     void *Buffer = malloc(Length);
+
+
     {
       AsyncInfoTy AsyncInfo(*SrcDeviceOrErr);
       Rc = SrcDeviceOrErr->retrieveData(Buffer, SrcAddr, Length, AsyncInfo);
     }
+
+
+
+
     if (Rc == OFFLOAD_SUCCESS) {
+
       AsyncInfoTy AsyncInfo(*DstDeviceOrErr);
       Rc = DstDeviceOrErr->submitData(DstAddr, Buffer, Length, AsyncInfo);
+
+
     }
     free(Buffer);
+
+
   }
 
   DP("omp_target_memcpy returns %d\n", Rc);

@@ -104,6 +104,8 @@ else()
     kmp_sched.cpp
     kmp_target_basescheduler.cpp
     kmp_target_heft.cpp
+    kmp_target_legacy_basescheduler.cpp
+    kmp_target_legacy_heft.cpp
     kmp_target_roundrobin.cpp
     kmp_target_graph_roundrobin.cpp
     kmp_target_scheduler.cpp
@@ -137,6 +139,7 @@ else()
   libomp_append(LIBOMP_CXXFILES kmp_stats.cpp LIBOMP_STATS)
   libomp_append(LIBOMP_CXXFILES kmp_stats_timing.cpp LIBOMP_STATS)
   libomp_append(LIBOMP_CXXFILES kmp_taskdeps.cpp)
+  libomp_append(LIBOMP_CXXFILES kmp_dmdas.cpp)
   libomp_append(LIBOMP_CXXFILES kmp_cancel.cpp)
   libomp_append(LIBOMP_CXXFILES kmp_target.cpp LIBOMP_OMPX_TASKGRAPH)
   endif()

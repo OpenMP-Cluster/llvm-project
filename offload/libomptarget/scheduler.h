@@ -43,9 +43,17 @@ int32_t GetCurrentTargetTaskID();
 /// Get the outlined function ID of the current task.
 const void *GetCurrentOutlinedFnID();
 
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void __kmpc_dmdas_target_dispatched(int32_t task_id)
+    __attribute__((weak));
+
+int32_t __kmpc_dmdas_get_task_device(int32_t task_id)
+    __attribute__((weak));
 
 enum class TaskState {
   UNDEFINED = -1,

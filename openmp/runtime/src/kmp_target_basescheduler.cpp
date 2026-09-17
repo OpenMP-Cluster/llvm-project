@@ -24,7 +24,7 @@
 BaseScheduler::BaseScheduler()
     : remaining_target_tasks(0), non_nowait_counter(0),
       non_task_scheduler(NonTaskScheduler::STATIC), graph_dump_dir_path(),
-      graph_counter(0) {
+      graph_counter(0), tdg(nullptr) {
 
   // Read environment variables
   if (char *env_str = std::getenv("OMPCLUSTER_TASK_GRAPH_DUMP_PATH")) {
@@ -158,6 +158,10 @@ void BaseScheduler::acquireAndScheduleGraph(kmp_tdg_info_t* tdg) {
   KG_TRACE(10,("acquireAndScheduleGraph Exit\n"));
 }
 
+void BaseScheduler::acquireGraphOnly(kmp_tdg_info_t *new_tdg) {
+  acquireNewGraph(new_tdg);
+}
+
 kmp_int32 BaseScheduler::scheduleTask(kmp_int32 task_id) {	
   KG_TRACE(10,("scheduleTask start, task_id: %d\n",task_id));
   kmp_int32 active_devices_number = __kmpc_get_num_devices();
@@ -249,20 +253,23 @@ void BaseScheduler::setTaskState(kmp_int32 task_id, TaskState new_state) {
    }
 }
 
-void BaseScheduler::setTaskState(kmp_int32 task_id, kmp_int32 device_id,
-                                 TaskState new_state) {
-  // Update rank that executed, in case of failures, the translation will say
-  // the real device that executed the task. Do not update if the task is FAILED
-  // and the new state is EXECUTED, because this is the case where the graph was
-  // just re-scheduled and we will ignore this state transition
-  KG_TRACE(50,("[SCHEDULER] setTaskState: task_id %d; device: %d\n",task_id,device_id));
-  if ((*get_schedule_map(tdg->tdg_id))[task_id].state == TaskState::FAILED &&
-      new_state == TaskState::EXECUTED) {
-    remaining_target_tasks--;
-    return;
-  }
+void BaseScheduler::setTaskState(
+    kmp_int32 task_id,
+    kmp_int32 device_id,
+    TaskState new_state)
+{
+    TaskScheduleData &task_schedule =
+        (*get_schedule_map(tdg->tdg_id))[task_id];
 
-  setTaskState(task_id, new_state);
+    /*
+     * schedule_map utilise des ranks commençant à 1,
+     * tandis que les devices commencent à 0.
+     */
+    task_schedule.rank = device_id + 1;
+
+
+
+    setTaskState(task_id, new_state);
 }
 
 // void BaseScheduler::setTaskSourceLocation(kmp_int32 task_id, ident_t *loc) {
@@ -314,6 +321,7 @@ void BaseScheduler::addMemoryTasks(){
 
   kmp_int32 gtid = __kmp_get_gtid();
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (start) gtid: %d\n",gtid));
+
   tdg->num_normal_tasks.store(tdg->num_tasks.load());
   KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, tdg->num_tasks.load());
   KG_TRACE(10, ("addMemoryTasks: __kmp_tdg_task_id = %d\n", __kmp_tdg_task_id.load()));
@@ -342,6 +350,50 @@ void BaseScheduler::addMemoryTasks(){
               if (task->target_data->args_base[I] == successor->target_data->args_base[J] && task->target_data->arg_types[I]!=0x120) {//TODO: Should we compare args or args_base?
 
 		
+                // Literal/scalar arguments are values, not mapped buffers.
+                constexpr kmp_int64 MAPTYPE_LITERAL = 0x100;
+                if ((task->target_data->arg_types[I] & MAPTYPE_LITERAL) ||
+                    (successor->target_data->arg_types[J] & MAPTYPE_LITERAL))
+                  continue;
+
+                // A memory task must correspond to an actual mapped object.
+                if (task->target_data->args_base[I] == nullptr ||
+                    task->target_data->args[I] == nullptr ||
+                    successor->target_data->args_base[J] == nullptr ||
+                    successor->target_data->args[J] == nullptr ||
+                    task->target_data->arg_sizes[I] <= 0)
+                  continue;
+
+                // Only communicate data carried by a real OUT -> IN
+                // dependence between these two TDG nodes.
+                bool source_out = false;
+                for (kmp_int32 D = 0; D < task->num_deps; ++D) {
+                  if (task->deps[D].addr ==
+                          reinterpret_cast<kmp_intptr_t>(
+                              task->target_data->args_base[I]) &&
+                      task->deps[D].dep_type.out) {
+                    source_out = true;
+                    break;
+                  }
+                }
+
+                if (!source_out)
+                  continue;
+
+                bool successor_in = false;
+                for (kmp_int32 D = 0; D < successor->num_deps; ++D) {
+                  if (successor->deps[D].addr ==
+                          reinterpret_cast<kmp_intptr_t>(
+                              successor->target_data->args_base[J]) &&
+                      successor->deps[D].dep_type.in) {
+                    successor_in = true;
+                    break;
+                  }
+                }
+
+                if (!successor_in)
+                  continue;
+
 		// kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
 		// kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
 
@@ -351,6 +403,8 @@ void BaseScheduler::addMemoryTasks(){
                 if(in_rank == out_rank) continue;
 
           	kmp_task_t* memory_task= __kmp_create_memory_task(gtid,task->task,successor->task,in_rank, out_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
+
+                if (memory_task)
 
 		//The pointers might have changed if the record_map was extended
 		if (task != &(tdg->record_map[task_id])) {
@@ -536,7 +590,6 @@ void BaseScheduler::dumpTaskGraph() {
     std::string tinfo = (*get_schedule_map(tdg->tdg_id))[tid].source_location;
 
     int task_id = KMP_TASKPTR_TO_TASKID(task);
-    printf("TASKID=%d\n", task_id);
 
     // Print graph node 
     dot << "  V" << task_id << " [label=<<B>ID " << task_id
@@ -571,8 +624,7 @@ void BaseScheduler::dumpTaskGraph() {
 }
 
 // Task Iterators
-// =============================================================================
-
+// ======================================================================
 std::list<TaskPtr> TopologicalOrder(kmp_tdg_info &tdg) {
   // Set of all nodes with no incoming edge
   std::unordered_set<TaskPtr> Set;
