@@ -188,7 +188,6 @@ EXTERN void __tgt_target_data_begin_mapper(ident_t *Loc, int64_t DeviceId,
                                            void **ArgMappers) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
-  printf("(__tgt_target_data_begin): DeviceId=%d\n", DeviceId);
   targetData<AsyncInfoTy>(Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
                           ArgTypes, ArgNames, ArgMappers, targetDataBegin,
                           "Entering OpenMP data region with being_mapper",
@@ -203,7 +202,6 @@ EXTERN void __tgt_target_data_begin_nowait_mapper(
     void *NoAliasDepList) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
-  printf("(__tgt_target_data_begin): DeviceId=%d\n", DeviceId);
   targetData<TaskAsyncInfoWrapperTy>(
       Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes, ArgTypes, ArgNames,
       ArgMappers, targetDataBegin,
@@ -221,7 +219,6 @@ EXTERN void __tgt_target_data_end_mapper(ident_t *Loc, int64_t DeviceId,
                                          void **ArgMappers) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
-  printf("(__tgt_target_data_end): DeviceId=%d\n", DeviceId);
   targetData<AsyncInfoTy>(Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
                           ArgTypes, ArgNames, ArgMappers, targetDataEnd,
                           "Exiting OpenMP data region with end_mapper", "end");
@@ -234,7 +231,6 @@ EXTERN void __tgt_target_data_end_nowait_mapper(
     void *NoAliasDepList) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
-  printf("(__tgt_target_data_end_nowait): DeviceId=%d\n", DeviceId);
   targetData<TaskAsyncInfoWrapperTy>(
       Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes, ArgTypes, ArgNames,
       ArgMappers, targetDataEnd,
@@ -404,7 +400,6 @@ EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                KernelArgsTy *KernelArgs) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   DeviceId = Schedule(Loc, DeviceId);
-  printf("(__tgt_target_kernel): DeviceId=%d\n", DeviceId);
   if (KernelArgs->Flags.NoWait) {
     int Rc = targetKernel<TaskAsyncInfoWrapperTy>(
         Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
@@ -626,7 +621,6 @@ EXTERN void __tgt_target_memtask(void *HstPtr, int64_t Size, int64_t DstDevice,
     DstPtr = DstTPR.TargetPointer;
   }
 
-  printf("SrcPtr=%p, DstPtr=%p\n", SrcPtr, DstPtr);
 
   omp_target_memcpy(DstPtr, SrcPtr, Size, 0, 0,
     static_cast<int32_t>(DstDevice), static_cast<int32_t>(SrcDevice));
