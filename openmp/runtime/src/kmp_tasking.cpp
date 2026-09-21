@@ -1316,7 +1316,7 @@ __kmp_release_deps(gtid, taskdata);
 
 
   #if OMPX_TASKGRAPH
-  if (is_taskgraph && track_children && saved_taskgroup) {
+  if (completed && is_taskgraph && track_children && saved_taskgroup) {
     int before = KMP_ATOMIC_LD_ACQ(&saved_taskgroup->count);
 
     KMP_ATOMIC_DEC(&saved_taskgroup->count);
