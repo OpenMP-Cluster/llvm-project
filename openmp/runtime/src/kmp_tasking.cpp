@@ -709,9 +709,10 @@ static void __kmp_task_start(kmp_int32 gtid, kmp_task_t *task,
   KMP_DEBUG_ASSERT(taskdata->td_flags.tasktype == TASK_EXPLICIT);
 
 #if OMPX_TASKGRAPH
-  if (taskdata->is_taskgraph){
-    kmp_tdg_info *tdg =  taskdata->tdg;
-    tdg->record_map[taskdata->td_tdg_task_id].start_time= std::chrono::high_resolution_clock::now();
+  if (taskdata->is_taskgraph && !taskdata->td_flags.started) {
+    kmp_tdg_info *tdg = taskdata->tdg;
+    tdg->record_map[taskdata->td_tdg_task_id].start_time =
+        std::chrono::high_resolution_clock::now();
   }
 #endif
 
@@ -1104,10 +1105,6 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
 
 #if OMPX_TASKGRAPH
   is_taskgraph = taskdata->is_taskgraph;
-  if (is_taskgraph){
-    __kmp_add_task_time(gtid, taskdata);
-      // KG_TRACE(10,("[Inter HEFT] __kmp_add_task_time (after):subsequent profile gtid %d, task %d,device %d,iteration %d \n",gtid,taskdata->td_task_id,__kmpc_get_task_device(taskdata->td_task_id),taskdata->tdg->record_map[taskdata->td_tdg_task_id].task_time[__kmpc_get_task_device(taskdata->td_task_id)].iteration_number));
-  }
 #endif
 
 // Pop task from stack if tied
@@ -1220,6 +1217,11 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
   }
 
   if (completed) {
+#if OMPX_TASKGRAPH
+    if (is_taskgraph) {
+      __kmp_add_task_time(gtid, taskdata);
+    }
+#endif
     taskdata->td_flags.complete = 1; // mark the task as completed
 #if OMPX_TASKGRAPH
     KG_TRACE(10, ("__kmp_task_finish: T#%d marking task %p (id: %d) as onced\n ", gtid, taskdata, taskdata->td_task_id));
