@@ -105,6 +105,9 @@ void BaseScheduler::acquireNewGraph(kmp_tdg_info_t* new_tdg) {
   // Acquire a new task graph from the target task integration layer.
   tdg = new_tdg;
   assert(tdg != nullptr);
+  // At graph acquisition, all recorded tasks are normal tasks.
+  // Memory tasks, if any, are added later by the scheduler.
+  tdg->num_normal_tasks.store(tdg->num_tasks.load());
   std::unordered_map<void *, kmp_int64> size_map;
   for (kmp_int32 idx = 0; idx < tdg->num_tasks; ++idx) {
     const kmp_node_info &task = tdg->record_map[idx];

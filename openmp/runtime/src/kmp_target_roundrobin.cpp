@@ -19,6 +19,9 @@ void RoundRobinScheduler::preScheduleTask(kmp_int32 task_id, kmp_int32 NumDevice
   auto &schedule_data = (*get_schedule_map(tdg->tdg_id))[task_id];
   auto &task = schedule_data.task;
 
+  if (schedule_data.rank != -1)
+    return;
+
   schedule_data.state = TaskState::SCHEDULED;
   // Target data task are all mapped to the same device because we noticed
   // better performance this way (we cannot predict where the data is actually
