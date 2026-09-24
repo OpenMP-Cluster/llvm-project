@@ -152,22 +152,12 @@ struct ProxyDevice {
 
     Image.ImageEnd = (void *)((ptrdiff_t)(Image.ImageStart) + Size);
 
-    llvm::SmallVector<std::unique_ptr<GenericPluginTy>> UsedPlugins;
-
     for (auto &Plugin : PluginManager.Plugins) {
       QueryResult = Plugin->is_plugin_compatible(&Image);
-      if (QueryResult) {
-        UsedPlugins.emplace_back(std::move(Plugin));
+      if (QueryResult)
         break;
-      }
     }
 
-    for (auto &Plugin : PluginManager.Plugins) {
-      if (Plugin)
-        UsedPlugins.emplace_back(std::move(Plugin));
-    }
-
-    PluginManager.Plugins = std::move(UsedPlugins);
     mapDevicesPerRemote();
 
     memFreeHost(Image.ImageStart);
