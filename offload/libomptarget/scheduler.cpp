@@ -16,11 +16,28 @@
 #include "rtl.h"
 #include "PluginManager.h"
 
+#include <cstring>
+
 // Scheduler interface in libomptarget
 // =============================================================================
 
 int Schedule(ident_t *Loc, int DeviceId) {
   DP("[SCHEDULER] Asked to schedule for Device%d (start)\n", DeviceId);
+
+  // A negative device ID means that no concrete device was selected yet.
+  // In that case, let the OMPC scheduler choose the target device.
+  //
+  // For an explicit concrete local device, preserve the OpenMP device
+  // selection instead of overriding it with the OMPC scheduler.
+  if (DeviceId >= 0) {
+    auto DeviceOrErr = PM->getDevice(DeviceId);
+    if (!DeviceOrErr)
+      FATAL_MESSAGE(DeviceId, "%s",
+                    toString(DeviceOrErr.takeError()).c_str());
+
+    if (std::strcmp((*DeviceOrErr).RTL->getName(), "MPI") != 0)
+      return DeviceId;
+  }
 
   const int32_t TaskId = __kmpc_target_task_current_task_id();
 
