@@ -340,88 +340,191 @@ void BaseScheduler::addMemoryTasks(){
     KG_TRACE(50,("[SCHEDULER-MT] searching successors for task %d; rank %d \n",KMP_TASKPTR_TO_TASKID(task),task_rank));
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
-     if (isTargetDataTask(successor))
-       continue;
-    kmp_int32 successor_rank = get_scheduleTask(KMP_TASKPTR_TO_TASKID(successor));
+
+      fprintf(stderr,
+              "[MT-EDGE] src_task=%d src_tdg=%d src_rank=%d "
+              "dst_task=%d dst_tdg=%d dst_is_data=%d\n",
+              KMP_TASKPTR_TO_TASKID(task),
+              KMP_TASKPTR_TO_TDG_TASKID(task),
+              task_rank,
+              KMP_TASKPTR_TO_TASKID(successor),
+              KMP_TASKPTR_TO_TDG_TASKID(successor),
+              isTargetDataTask(successor));
+
+      if (isTargetDataTask(successor))
+        continue;
+
+      kmp_int32 successor_rank =
+          get_scheduleTask(KMP_TASKPTR_TO_TASKID(successor));
+
+      fprintf(stderr,
+              "[MT-EDGE-RANK] src_task=%d src_rank=%d "
+              "dst_task=%d dst_rank=%d\n",
+              KMP_TASKPTR_TO_TASKID(task),
+              task_rank,
+              KMP_TASKPTR_TO_TASKID(successor),
+              successor_rank);
+
+      if (KMP_TASKPTR_TO_TASKID(task) == 71 &&
+          KMP_TASKPTR_TO_TASKID(successor) == 72) {
+        fprintf(stderr,
+                "[MT-71-72] src_args=%d dst_args=%d "
+                "src_deps=%d dst_deps=%d\n",
+                task->target_data ? task->target_data->num_args : -1,
+                successor->target_data ? successor->target_data->num_args : -1,
+                task->num_deps,
+                successor->num_deps);
+
+        if (task->target_data) {
+          for (kmp_int32 I = 0; I < task->target_data->num_args; ++I) {
+            fprintf(stderr,
+                    "[MT-71-ARG] I=%d base=%p arg=%p size=%lld type=0x%llx\n",
+                    I,
+                    task->target_data->args_base[I],
+                    task->target_data->args[I],
+                    static_cast<long long>(task->target_data->arg_sizes[I]),
+                    static_cast<unsigned long long>(
+                        task->target_data->arg_types[I]));
+          }
+        }
+
+        if (successor->target_data) {
+          for (kmp_int32 J = 0; J < successor->target_data->num_args; ++J) {
+            fprintf(stderr,
+                    "[MT-72-ARG] J=%d base=%p arg=%p size=%lld type=0x%llx\n",
+                    J,
+                    successor->target_data->args_base[J],
+                    successor->target_data->args[J],
+                    static_cast<long long>(
+                        successor->target_data->arg_sizes[J]),
+                    static_cast<unsigned long long>(
+                        successor->target_data->arg_types[J]));
+          }
+        }
+
+        for (kmp_int32 D = 0; D < task->num_deps; ++D) {
+          fprintf(stderr,
+                  "[MT-71-DEP] D=%d addr=%p in=%d out=%d\n",
+                  D,
+                  reinterpret_cast<void *>(task->deps[D].addr),
+                  task->deps[D].dep_type.in,
+                  task->deps[D].dep_type.out);
+        }
+
+        for (kmp_int32 D = 0; D < successor->num_deps; ++D) {
+          fprintf(stderr,
+                  "[MT-72-DEP] D=%d addr=%p in=%d out=%d\n",
+                  D,
+                  reinterpret_cast<void *>(successor->deps[D].addr),
+                  successor->deps[D].dep_type.in,
+                  successor->deps[D].dep_type.out);
+        }
+      }
     KG_TRACE(50,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
-      if (successor_rank != task_rank || isTargetDataTask(task) || isTargetDataTask(successor) ) {
-	if(successor->target_data != nullptr && task->target_data != nullptr) {
-	  for (kmp_int32 I = 0; I < task->target_data->num_args; I++) {  
-            KG_TRACE(50,("[SCHEDULER-MT] arg task: %p\n",task->target_data->args[I]));
-            for (kmp_int32 J = 0; J < successor->target_data->num_args; J++) {
-            KG_TRACE(50,("[SCHEDULER-MT] arg successor: %p\n",successor->target_data->args[J]));
-              if (task->target_data->args_base[I] == successor->target_data->args_base[J] && task->target_data->arg_types[I]!=0x120) {//TODO: Should we compare args or args_base?
+      if (successor_rank != task_rank ||
+          isTargetDataTask(task) ||
+          isTargetDataTask(successor)) {
 
-		
-                // Literal/scalar arguments are values, not mapped buffers.
-                constexpr kmp_int64 MAPTYPE_LITERAL = 0x100;
-                if ((task->target_data->arg_types[I] & MAPTYPE_LITERAL) ||
-                    (successor->target_data->arg_types[J] & MAPTYPE_LITERAL))
-                  continue;
+        if (task->target_data != nullptr &&
+            successor->target_data != nullptr) {
 
-                // A memory task must correspond to an actual mapped object.
-                if (task->target_data->args_base[I] == nullptr ||
-                    task->target_data->args[I] == nullptr ||
-                    successor->target_data->args_base[J] == nullptr ||
-                    successor->target_data->args[J] == nullptr ||
-                    task->target_data->arg_sizes[I] <= 0)
-                  continue;
+          for (kmp_int32 SrcDep = 0;
+               SrcDep < task->num_deps;
+               ++SrcDep) {
 
-                // Only communicate data carried by a real OUT -> IN
-                // dependence between these two TDG nodes.
-                bool source_out = false;
-                for (kmp_int32 D = 0; D < task->num_deps; ++D) {
-                  if (task->deps[D].addr ==
-                          reinterpret_cast<kmp_intptr_t>(
-                              task->target_data->args_base[I]) &&
-                      task->deps[D].dep_type.out) {
-                    source_out = true;
-                    break;
-                  }
-                }
+            if (!task->deps[SrcDep].dep_type.out)
+              continue;
 
-                if (!source_out)
-                  continue;
+            const kmp_intptr_t DepAddr =
+                task->deps[SrcDep].addr;
 
-                bool successor_in = false;
-                for (kmp_int32 D = 0; D < successor->num_deps; ++D) {
-                  if (successor->deps[D].addr ==
-                          reinterpret_cast<kmp_intptr_t>(
-                              successor->target_data->args_base[J]) &&
-                      successor->deps[D].dep_type.in) {
-                    successor_in = true;
-                    break;
-                  }
-                }
+            bool SuccessorConsumes = false;
 
-                if (!successor_in)
-                  continue;
+            for (kmp_int32 DstDep = 0;
+                 DstDep < successor->num_deps;
+                 ++DstDep) {
 
-		// kmp_int32 in_rank = isTargetDataTask(task) ? omp_get_initial_device() : task_rank-1;    
-		// kmp_int32 out_rank = isTargetDataTask(successor) ? omp_get_initial_device() : successor_rank-1; 
-
-                kmp_int32 in_rank = task_rank;    
-                kmp_int32 out_rank = successor_rank;
-      
-                if(in_rank == out_rank) continue;
-
-          	kmp_task_t* memory_task= __kmp_create_memory_task(gtid,task->task,successor->task,in_rank, out_rank,task->target_data->args[I] ,task->target_data->arg_sizes[I],true);
-
-                if (memory_task)
-
-		//The pointers might have changed if the record_map was extended
-		if (task != &(tdg->record_map[task_id])) {
-                  task = &(tdg->record_map[task_id]);
-                  successor = &(tdg->record_map[task->successors[idx_succ]]);
-		}
-		// KG_TRACE(10,("[SCHEDULER-MT] Adding memory task %d ; predecessor : %d ; successor : %d \n", KMP_TASK_TO_TASKDATA(memory_task)->td_task_id,KMP_TASKPTR_TO_TASKID(task),KMP_TASKPTR_TO_TASKID(successor)));
-
+              if (successor->deps[DstDep].addr == DepAddr &&
+                  successor->deps[DstDep].dep_type.in) {
+                SuccessorConsumes = true;
+                break;
               }
-	    }
+            }
+
+            if (!SuccessorConsumes)
+              continue;
+
+            void *MemoryAddr =
+                reinterpret_cast<void *>(DepAddr);
+
+            kmp_int64 MemorySize = 0;
+
+            for (kmp_int32 I = 0;
+                 I < task->target_data->num_args;
+                 ++I) {
+
+              constexpr kmp_int64 MAPTYPE_LITERAL = 0x100;
+
+              if (task->target_data->arg_types[I] &
+                  MAPTYPE_LITERAL)
+                continue;
+
+              if (task->target_data->args_base[I] !=
+                  MemoryAddr)
+                continue;
+
+              if (task->target_data->args[I] == nullptr ||
+                  task->target_data->arg_sizes[I] <= 0)
+                continue;
+
+              MemorySize =
+                  task->target_data->arg_sizes[I];
+              break;
+            }
+
+            if (MemorySize <= 0)
+              continue;
+
+            const kmp_int32 InRank = task_rank;
+            const kmp_int32 OutRank = successor_rank;
+
+            if (InRank == OutRank)
+              continue;
+
+            fprintf(stderr,
+                    "[MEMTASK-INSERT] source=%d dev=%d -> "
+                    "target=%d dev=%d addr=%p size=%lld\n",
+                    KMP_TASKPTR_TO_TASKID(task),
+                    InRank,
+                    KMP_TASKPTR_TO_TASKID(successor),
+                    OutRank,
+                    MemoryAddr,
+                    static_cast<long long>(MemorySize));
+
+            kmp_task_t *MemoryTask =
+                __kmp_create_memory_task(
+                    gtid,
+                    task->task,
+                    successor->task,
+                    InRank,
+                    OutRank,
+                    MemoryAddr,
+                    MemorySize,
+                    true);
+
+            if (MemoryTask) {
+              // record_map may have moved if insertion enlarged it.
+              if (task != &(tdg->record_map[task_id])) {
+                task = &(tdg->record_map[task_id]);
+                successor =
+                    &(tdg->record_map[
+                        task->successors[idx_succ]]);
+              }
+            }
           }
         }
       }
-    } 
+    }
   }
 
   KMP_ATOMIC_ST_RLX(&__kmp_tdg_task_id, 0);
@@ -493,6 +596,11 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
   kmp_int32 task_counter = 0;
 
   kmp_int32 NumDevices = __kmpc_get_num_devices();
+
+  fprintf(stderr,
+          "[RR-GRAPH] offset=%d iteration=%d num_devices=%d\n",
+          offset, scheduling_iteration_counter, NumDevices);
+
   for (auto &map_entry : (*get_schedule_map(tdg->tdg_id))) {
     KG_TRACE(30, ("scheduleGraphRR: map_entry.first: %d\n", map_entry.first));
     TaskScheduleData &task_schedule = map_entry.second;
@@ -508,6 +616,11 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
     else {
       task_schedule.state = TaskState::SCHEDULED;
       task_schedule.rank = ((task_counter++ + offset) % NumDevices) + 1;
+
+      fprintf(stderr,
+              "[RR-GRAPH] task=%d rank=%d\n",
+              KMP_TASKPTR_TO_TASKID(task),
+              task_schedule.rank);
     }
  }
 

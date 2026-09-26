@@ -1730,6 +1730,7 @@ kmp_task_t *__kmp_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
 #if OMPX_TASKGRAPH
   taskdata->td_flags.onced = 0;
   taskdata->is_taskgraph = 0;
+  taskdata->td_memory_task_has_runtime_depnode = false;
   taskdata->tdg = nullptr;
 #endif
   KMP_ATOMIC_ST_RLX(&taskdata->td_incomplete_child_tasks, 0);

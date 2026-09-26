@@ -2891,6 +2891,7 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
 #endif
 #if OMPX_TASKGRAPH
   bool is_taskgraph = 0; // whether the task is within a TDG
+  bool td_memory_task_has_runtime_depnode = false;
   kmp_tdg_info_t *tdg; // used to associate task with a TDG
   kmp_int32 td_tdg_task_id; // local task id in its TDG
   kmp_target_task_data_t *td_target_info; // Pointer to target nowait data info
@@ -4872,7 +4873,9 @@ kmp_task_t *__kmp_alloc_memory_task(
     int source_device,
     int target_device,
     void *dep_addr,
-    size_t size_addr);
+    size_t size_addr,
+    kmp_task_t *source,
+    kmp_task_t *target);
 
 kmp_task_t *__kmp_insert_legacy_memory_task(
     kmp_int32 gtid,
