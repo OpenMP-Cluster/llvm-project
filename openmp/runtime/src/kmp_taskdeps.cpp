@@ -796,15 +796,6 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
   auto *mem_task_args =
   reinterpret_cast<kmp_memory_task_args_t *>(task->shareds);
 
-  fprintf(stderr,
-          "[MEMTASK-EXEC] gtid=%d task=%p "
-          "src_dev=%d dst_dev=%d addr=%p size=%zu\n",
-          gtid, static_cast<void *>(task),
-          mem_task_args->SrcDevice,
-          mem_task_args->DstDevice,
-          mem_task_args->Dst,
-          mem_task_args->Length);
-
   kmp_taskdata_t *MemoryTaskData =
       KMP_TASK_TO_TASKDATA(task);
   kmp_depnode_t *MemoryNode =
@@ -820,57 +811,6 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
           ? KMP_TASK_TO_TASKDATA(mem_task_args->TargetTask)
           : nullptr;
 
-  fprintf(stderr,
-          "[MEMTASK-ORIGINAL-NODES] "
-          "memory_task=%p memory_node=%p "
-          "source_task=%p source_node=%p "
-          "target_task=%p target_node=%p\n",
-          static_cast<void *>(task),
-          static_cast<void *>(MemoryNode),
-          static_cast<void *>(mem_task_args->SourceTask),
-          SourceTaskData
-              ? static_cast<void *>(SourceTaskData->td_depnode)
-              : nullptr,
-          static_cast<void *>(mem_task_args->TargetTask),
-          TargetTaskData
-              ? static_cast<void *>(TargetTaskData->td_depnode)
-              : nullptr);
-
-  if (MemoryNode) {
-    for (kmp_depnode_list_t *It = MemoryNode->dn.successors;
-         It != nullptr; It = It->next) {
-      fprintf(stderr,
-              "[MEMTASK-ORIGINAL-COMPARE] "
-              "successor_node=%p "
-              "is_target_node=%d "
-              "successor_task=%p "
-              "is_target_task=%d\n",
-              static_cast<void *>(It->node),
-              static_cast<int>(
-                  TargetTaskData &&
-                  It->node == TargetTaskData->td_depnode),
-              It->node
-                  ? static_cast<void *>(It->node->dn.task)
-                  : nullptr,
-              static_cast<int>(
-                  It->node &&
-                  It->node->dn.task == mem_task_args->TargetTask));
-    }
-  }
-
-  fprintf(stderr,
-          "[MEMTASK-NODE-BEFORE] task_id=%d tdg_id=%d "
-          "node=%p node_task=%p successors=%p\n",
-          MemoryTaskData->td_task_id,
-          MemoryTaskData->td_tdg_task_id,
-          static_cast<void *>(MemoryNode),
-          MemoryNode
-              ? static_cast<void *>(MemoryNode->dn.task)
-              : nullptr,
-          MemoryNode
-              ? static_cast<void *>(MemoryNode->dn.successors)
-              : nullptr);
-
   if (MemoryNode) {
     for (kmp_depnode_list_t *It = MemoryNode->dn.successors;
          It != nullptr; It = It->next) {
@@ -879,18 +819,8 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
       kmp_taskdata_t *SuccTD =
           SuccTask ? KMP_TASK_TO_TASKDATA(SuccTask) : nullptr;
 
-      fprintf(stderr,
-              "[MEMTASK-SUCC-BEFORE] node=%p task=%p "
-              "task_id=%d tdg_id=%d\n",
-              static_cast<void *>(It->node),
-              static_cast<void *>(SuccTask),
-              SuccTD ? SuccTD->td_task_id : -1,
-              SuccTD ? SuccTD->td_tdg_task_id : -1);
     }
   }
-
-
-
 
   void (*tgt_target_memtask)(void *, int64_t , int64_t , int64_t);
   *(void **)(&tgt_target_memtask) = KMP_DLSYM("__tgt_target_memtask");
@@ -898,20 +828,6 @@ static void memory_task_entry(int gtid, kmp_task_t *task) {
 tgt_target_memtask(mem_task_args->Dst, mem_task_args->Length,
                    mem_task_args->DstDevice, mem_task_args->SrcDevice);
 
-
-  fprintf(stderr,
-          "[MEMTASK-NODE-AFTER] task_id=%d tdg_id=%d "
-          "node=%p node_task=%p successors=%p\n",
-          MemoryTaskData->td_task_id,
-          MemoryTaskData->td_tdg_task_id,
-          static_cast<void *>(MemoryNode),
-          MemoryNode
-              ? static_cast<void *>(MemoryNode->dn.task)
-              : nullptr,
-          MemoryNode
-              ? static_cast<void *>(MemoryNode->dn.successors)
-              : nullptr);
-
   if (MemoryNode) {
     for (kmp_depnode_list_t *It = MemoryNode->dn.successors;
          It != nullptr; It = It->next) {
@@ -920,13 +836,6 @@ tgt_target_memtask(mem_task_args->Dst, mem_task_args->Length,
       kmp_taskdata_t *SuccTD =
           SuccTask ? KMP_TASK_TO_TASKDATA(SuccTask) : nullptr;
 
-      fprintf(stderr,
-              "[MEMTASK-SUCC-AFTER] node=%p task=%p "
-              "task_id=%d tdg_id=%d\n",
-              static_cast<void *>(It->node),
-              static_cast<void *>(SuccTask),
-              SuccTD ? SuccTD->td_task_id : -1,
-              SuccTD ? SuccTD->td_tdg_task_id : -1);
     }
   }
 
@@ -936,7 +845,6 @@ tgt_target_memtask(mem_task_args->Dst, mem_task_args->Length,
 // #else
 //   __kmp_thread_free(thread, mem_task_args);
 // #endif
-
 
 }
 
@@ -1072,17 +980,6 @@ kmp_task_t *__kmp_create_memory_task(
 
   const bool IsRecording =
       __kmp_tdg_is_recording(tdg->tdg_status);
-
-  fprintf(stderr,
-          "[MEMTASK-CREATE-MODE] tdg=%p status=%d recording=%d "
-          "source=%d target=%d num_tasks=%d normal_tasks=%d\n",
-          static_cast<void *>(tdg),
-          static_cast<int>(tdg->tdg_status),
-          static_cast<int>(IsRecording),
-          source_td->td_task_id,
-          target_td->td_task_id,
-          static_cast<int>(tdg->num_tasks.load()),
-          static_cast<int>(tdg->num_normal_tasks.load()));
 
   kmp_task_t *memory_task = __kmp_alloc_memory_task(
       gtid, source_device, target_device, dep_addr, size_addr,
@@ -1231,12 +1128,10 @@ kmp_task_t *__kmp_create_memory_task(
   memory_info->successors[0] = target_tdg_id;
   memory_info->nsuccessors = 1;
 
-
   KG_TRACE(50, ("(create_memory_task) tdg = %p\n", tdg));
   KG_TRACE(10,("__kmp_create_memory_task (exit)\n"));
   return memory_task;
 }
-
 
 /*vector<kmp_task_and_pred>
 __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
@@ -1306,7 +1201,6 @@ __kmp_insert_memory_tasks_with_deps(kmp_int32 gtid, kmp_depnode_t *node,
           int32_t Flags = 0;
           kmp_tasking_flags_t *InputFlags = (kmp_tasking_flags_t *)&Flags;
           InputFlags->hidden_helper = 1;
-
 
           // Lambda function that apply the task
           // TODO: update this function to do real memory transfer
@@ -1618,7 +1512,6 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
                 "loc=%p task=%p, transferring to __kmp_omp_task\n",
                 gtid, loc_ref, new_taskdata));
 
-
   if (__kmp_use_dmdas_runtime())
     return TASK_CURRENT_NOT_QUEUED;
 
@@ -1841,19 +1734,6 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) {
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_depnode_t *node = taskdata->td_depnode;
   kmp_tdg_info_t *tdg = taskdata->tdg;
-
-  fprintf(stderr,
-        "[MEMTASK-REMOVE] task_id=%d tdg_id=%d "
-        "node=%p has_runtime_depnode=%d "
-        "tdg_status=%d num_tasks=%d normal_tasks=%d\n",
-        taskdata->td_task_id,
-        taskdata->td_tdg_task_id,
-        static_cast<void *>(node),
-        static_cast<int>(
-            taskdata->td_memory_task_has_runtime_depnode),
-        static_cast<int>(tdg->tdg_status),
-        static_cast<int>(tdg->num_tasks.load()),
-        static_cast<int>(tdg->num_normal_tasks.load()));
   
   KG_TRACE(30, ("__kmpc_remove_task: td_task_id=%d\n", taskdata->td_task_id));
  
@@ -1915,7 +1795,6 @@ void __kmpc_remove_task(kmp_node_info_t* task_tdg) {
   // consumed by __kmp_release_deps(). Do not attempt to reconstruct its
   // source -> target edge here. Only the persistent TDG record_map edges
   // above need to be restored for the next replay.
-
 
   // kmp_depnode_list_t *next;
   // for (kmp_depnode_list_t *p = node->dn.successors; p != nullptr; p = next) {

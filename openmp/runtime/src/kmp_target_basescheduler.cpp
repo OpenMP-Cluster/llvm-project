@@ -270,8 +270,6 @@ void BaseScheduler::setTaskState(
      */
     task_schedule.rank = device_id + 1;
 
-
-
     setTaskState(task_id, new_state);
 }
 
@@ -341,29 +339,11 @@ void BaseScheduler::addMemoryTasks(){
     for (kmp_int32 idx_succ = 0 ; idx_succ < task->nsuccessors ; idx_succ++) {
       kmp_node_info* successor = &(tdg->record_map[task->successors[idx_succ]]);
 
-      fprintf(stderr,
-              "[MT-EDGE] src_task=%d src_tdg=%d src_rank=%d "
-              "dst_task=%d dst_tdg=%d dst_is_data=%d\n",
-              KMP_TASKPTR_TO_TASKID(task),
-              KMP_TASKPTR_TO_TDG_TASKID(task),
-              task_rank,
-              KMP_TASKPTR_TO_TASKID(successor),
-              KMP_TASKPTR_TO_TDG_TASKID(successor),
-              isTargetDataTask(successor));
-
       if (isTargetDataTask(successor))
         continue;
 
       kmp_int32 successor_rank =
           get_scheduleTask(KMP_TASKPTR_TO_TASKID(successor));
-
-      fprintf(stderr,
-              "[MT-EDGE-RANK] src_task=%d src_rank=%d "
-              "dst_task=%d dst_rank=%d\n",
-              KMP_TASKPTR_TO_TASKID(task),
-              task_rank,
-              KMP_TASKPTR_TO_TASKID(successor),
-              successor_rank);
 
       if (KMP_TASKPTR_TO_TASKID(task) == 71 &&
           KMP_TASKPTR_TO_TASKID(successor) == 72) {
@@ -491,16 +471,6 @@ void BaseScheduler::addMemoryTasks(){
             if (InRank == OutRank)
               continue;
 
-            fprintf(stderr,
-                    "[MEMTASK-INSERT] source=%d dev=%d -> "
-                    "target=%d dev=%d addr=%p size=%lld\n",
-                    KMP_TASKPTR_TO_TASKID(task),
-                    InRank,
-                    KMP_TASKPTR_TO_TASKID(successor),
-                    OutRank,
-                    MemoryAddr,
-                    static_cast<long long>(MemorySize));
-
             kmp_task_t *MemoryTask =
                 __kmp_create_memory_task(
                     gtid,
@@ -531,7 +501,6 @@ void BaseScheduler::addMemoryTasks(){
 
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
 }
-
 
 void BaseScheduler::waitScheduleGraph(){
 
@@ -597,10 +566,6 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
 
   kmp_int32 NumDevices = __kmpc_get_num_devices();
 
-  fprintf(stderr,
-          "[RR-GRAPH] offset=%d iteration=%d num_devices=%d\n",
-          offset, scheduling_iteration_counter, NumDevices);
-
   for (auto &map_entry : (*get_schedule_map(tdg->tdg_id))) {
     KG_TRACE(30, ("scheduleGraphRR: map_entry.first: %d\n", map_entry.first));
     TaskScheduleData &task_schedule = map_entry.second;
@@ -617,10 +582,6 @@ void BaseScheduler::scheduleGraphRR(kmp_int32 offset) {
       task_schedule.state = TaskState::SCHEDULED;
       task_schedule.rank = ((task_counter++ + offset) % NumDevices) + 1;
 
-      fprintf(stderr,
-              "[RR-GRAPH] task=%d rank=%d\n",
-              KMP_TASKPTR_TO_TASKID(task),
-              task_schedule.rank);
     }
  }
 
