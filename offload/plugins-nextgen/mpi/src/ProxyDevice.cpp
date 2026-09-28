@@ -645,23 +645,6 @@ struct ProxyDevice {
           &KernelArgs,
           TgtAsyncInfo);
 
-      double BackendKernelTime =
-          TgtAsyncInfo->KernelExecutionTime;
-
-      if (BackendKernelTime > 0.0) {
-        AsyncHandle->KernelExecutionTimes.push_back(
-            BackendKernelTime);
-
-        /*printf(
-            "PROXY BACKEND KERNEL TIME "
-            "async=%p time=%.9f\n",
-            HostAsyncInfoPtr,
-            BackendKernelTime);
-        fflush(stdout);*/
-
-        // Avoid reusing a stale measurement.
-        TgtAsyncInfo->KernelExecutionTime = 0.0;
-      }
     }
 
     // Event completion notification.
@@ -951,16 +934,22 @@ struct ProxyDevice {
       std::lock_guard<std::mutex> Lock(
           AsyncHandle->AsyncInfoMutex);
 
-      if (!AsyncHandle->KernelExecutionTimes.empty()) {
-        KernelTime =
-            AsyncHandle->KernelExecutionTimes.front();
+      auto *TgtAsyncInfo =
+          AsyncHandle->AsyncInfoPtr.get();
 
-        AsyncHandle->KernelExecutionTimes.pop_front();
+      // query_async() inside waitAsyncOpEnd() has completed the
+      // backend operation. CUDA collectKernelTiming() therefore
+      // has populated KernelExecutionTime with the device-side
+      // elapsed kernel time.
+      KernelTime =
+          TgtAsyncInfo->KernelExecutionTime;
 
-        // Keep the launch timestamps in sync.
-        if (!AsyncHandle->KernelLaunchTimes.empty())
-          AsyncHandle->KernelLaunchTimes.pop_front();
-      }
+      // Consume the measurement exactly once.
+      TgtAsyncInfo->KernelExecutionTime = 0.0;
+
+      // Keep the fallback launch timestamps in sync.
+      if (!AsyncHandle->KernelLaunchTimes.empty())
+        AsyncHandle->KernelLaunchTimes.pop_front();
     }
 
     RequestManager.send(

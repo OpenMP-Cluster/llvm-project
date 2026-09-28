@@ -562,8 +562,15 @@ EXTERN void __tgt_target_nowait_query(void **AsyncHandle) {
 
   double KernelTime = AsyncInfo->getKernelExecutionTime();
 
-  printf("LIBOMPTARGET KERNEL TIME time=%.9f\n", KernelTime);
-  fflush(stdout);
+  if (KernelTime > 0.0) {
+    int32_t TaskId = -1;
+
+    if (__kmpc_target_task_current_task_id)
+      TaskId = __kmpc_target_task_current_task_id();
+
+    if (TaskId != -1 && __kmpc_dmdas_record_kernel_time)
+      __kmpc_dmdas_record_kernel_time(TaskId, KernelTime);
+  }
 
   // When a thread successfully completes a target nowait region, we
   // exponentially backoff its query counter by the query factor.

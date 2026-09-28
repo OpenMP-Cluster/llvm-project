@@ -152,6 +152,10 @@ struct RuntimeWorker
 
     int device_id;
 
+    // Raw OMPC/libomptarget device type:
+    // 0 = UNKNOWN, 1 = CPU, 2 = CUDA, 3 = HSA.
+    int device_type;
+
     RuntimeNode *node;
 
     bool busy;
@@ -1976,7 +1980,6 @@ void RuntimeScheduler::submit(DMDASTask *task)
         return;
     }
 
-
     best_worker->available_time = best_cost;
 
     task->priority = best_score;
@@ -2295,7 +2298,10 @@ void __kmp_dmdas_init(int /*nworkers*/)
 
         worker.id = device;
         worker.device_id = device;
+        worker.device_type =
+            __kmpc_get_device_type(device);
         worker.node = &node;
+
         worker.busy = false;
         worker.current_task = nullptr;
         worker.available_time = 0.0;
@@ -2668,12 +2674,43 @@ void __kmp_dmdas_notify_task_completed(kmp_task_t *omp_task)
         * At this point OpenMP/libomptarget has reported its completion.
         */
         if (task->assigned_worker != nullptr) {
+            RuntimeWorker *worker =
+                task->assigned_worker;
+
             RuntimeNode *node =
-                task->assigned_worker->node;
+                worker->node;
 
+            /*
+             * CPU target execution is synchronous. Measure it from the
+             * OpenMP task execution timestamps.
+             *
+             * CUDA execution is recorded separately using CUDA events via
+             * __kmpc_dmdas_record_kernel_time(), so do not record it here.
+             */
+            if (worker->device_type == 1 &&
+                task->model_id != 0 &&
+                task->execution_started) {
 
+                auto execution_end =
+                    std::chrono::high_resolution_clock::now();
 
-                for (size_t i = 0; i < task->deps.size(); ++i) {
+                double execution_duration =
+                    std::chrono::duration<double>(
+                        execution_end -
+                        task->execution_start
+                    ).count();
+
+                task->execution_started = false;
+
+                if (execution_duration > 0.0) {
+                    g_perf_model.record_execution(
+                        task,
+                        worker,
+                        execution_duration);
+                }
+            }
+
+            for (size_t i = 0; i < task->deps.size(); ++i) {
 
                     auto &dep = task->deps[i];
 
