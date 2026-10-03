@@ -1218,7 +1218,7 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
 
   if (completed) {
 #if OMPX_TASKGRAPH
-    if (is_taskgraph) {
+    if (is_taskgraph && !__kmp_use_dmdas_runtime()) {
       __kmp_add_task_time(gtid, taskdata);
     }
 #endif
@@ -4832,7 +4832,7 @@ void __kmpc_give_task(kmp_task_t *ptask, kmp_int32 start = 0) {
 
 
 
-  bool given = __kmp_give_task(thread, k, ptask, pass);
+  bool given = __kmp_give_task(thread, selected_k, ptask, pass);
 
 
 

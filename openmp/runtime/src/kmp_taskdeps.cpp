@@ -1486,9 +1486,12 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
     __kmp_init_node(node, /*on_stack=*/false);
     new_taskdata->td_depnode = node;
 
-    if (__kmp_check_deps(gtid, node, new_task, &current_task->td_dephash,
+    bool native_blocked =
+        __kmp_check_deps(gtid, node, new_task, &current_task->td_dephash,
                          NO_DEP_BARRIER, ndeps, dep_list, ndeps_noalias,
-                         noalias_dep_list)) {
+                         noalias_dep_list);
+
+    if (native_blocked) {
       KA_TRACE(10, ("__kmpc_omp_task_with_deps(exit): T#%d task had blocking "
                     "dependences: "
                     "loc=%p task=%p, return: TASK_CURRENT_NOT_QUEUED\n",
@@ -1512,8 +1515,15 @@ kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,
                 "loc=%p task=%p, transferring to __kmp_omp_task\n",
                 gtid, loc_ref, new_taskdata));
 
-  if (__kmp_use_dmdas_runtime())
+  if (__kmp_use_dmdas_runtime()) {
+    /*
+     * __kmp_check_deps() did not find any blocking native OpenMP
+     * dependency.  The task is therefore native-ready.  DMDAS may
+     * submit it once its own dependency count is also zero.
+     */
+    __kmp_dmdas_native_ready(new_task);
     return TASK_CURRENT_NOT_QUEUED;
+  }
 
   kmp_int32 ret = __kmp_omp_task(gtid, new_task, true);
 

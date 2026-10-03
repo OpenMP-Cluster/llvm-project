@@ -141,10 +141,24 @@ struct RuntimeNode
 
     std::vector<RuntimeWorker*> workers;
 
-    double bandwidth = 1.0;
+    /*
+     * Directional communication model.
+     *
+     * For a source node S and destination node D:
+     *
+     *   transfer_time =
+     *       S.latency[D.id] +
+     *       bytes / S.bandwidth[D.id]
+     */
+    std::vector<double> bandwidth;
 
-    double latency = 0.0;
+    std::vector<double> latency;
 };
+
+static double transfer_time(
+    RuntimeNode *src,
+    RuntimeNode *dst,
+    size_t bytes);
 
 struct RuntimeWorker
 {
@@ -1280,8 +1294,26 @@ bool __kmp_dmdas_all_tasks_completed()
     std::lock_guard<std::mutex> lock(dmdas_mutex);
 
     for (DMDASTask *task : g_dmdas_tasks) {
-        if (!task->completed)
+        if (!task->completed) {
+            fprintf(stderr,
+                    "[DMDAS-STUCK] "
+                    "instance=%d omp_id=%d "
+                    "completed=%d submitted=%d native_ready=%d "
+                    "remaining=%d transfers=%zu pending=%d ready=%d "
+                    "assigned=%p\\n",
+                    task->instance_id,
+                    KMP_TASK_TO_TASKDATA(task->omp_task)->td_task_id,
+                    static_cast<int>(task->completed),
+                    static_cast<int>(task->submitted),
+                    static_cast<int>(task->native_ready),
+                    task->remaining_dependencies.load(),
+                    task->transfers.size(),
+                    task->pending_transfers.load(),
+                    static_cast<int>(task->transfers_ready.load()),
+                    static_cast<void *>(task->assigned_worker));
+            fflush(stderr);
             return false;
+        }
     }
 
     return true;
@@ -1519,8 +1551,7 @@ RuntimeTransferManager::submit(
     t->dst = dst;
 
     t->completion_time =
-        static_cast<double>(data->size) /
-        src->bandwidth;
+        transfer_time(src, dst, data->size);
 
     t->finished.store(
         false,
@@ -1837,11 +1868,16 @@ void RuntimeScheduler::submit(DMDASTask *task)
     {
 
 
-        double cost =
-            worker.available_time +
+        double compute_cost =
             g_perf_model.compute_cost(
                 task,
                 &worker);
+
+        double transfer_cost = 0.0;
+
+        double cost =
+            worker.available_time +
+            compute_cost;
 
         double locality_bonus = 0.0;
 
@@ -1881,6 +1917,7 @@ void RuntimeScheduler::submit(DMDASTask *task)
                         worker.node);
 
                 cost += transfer;
+                transfer_cost += transfer;
 
                 if (g_data_manager.has_valid_copy(
                         data,
@@ -1895,12 +1932,94 @@ void RuntimeScheduler::submit(DMDASTask *task)
             - task->bottom_level
             - locality_bonus * 1e-6;
 
+        if (getenv("OMPCLUSTER_DMDAS_PLACEMENT_DEBUG")) {
+            fprintf(
+                stderr,
+                "[DMDAS-PLACEMENT] task=%d model=%zx features=%zu "
+                "worker=%d device=%d type=%d "
+                "available=%.9g compute=%.9g transfer=%.9g "
+                "locality_bytes=%.0f bottom=%.9g score=%.9g\n",
+                task->instance_id,
+                task->model_id,
+                task->perf_features.values.size(),
+                worker.id,
+                worker.device_id,
+                worker.device_type,
+                worker.available_time,
+                compute_cost,
+                transfer_cost,
+                locality_bonus,
+                task->bottom_level,
+                score);
+        }
+
         if (score < best_score)
         {
             best_score = score;
             best_cost = cost;
             best_worker = &worker;
         }
+    }
+
+    /*
+     * Calibration-only worker override.
+     *
+     * This is intentionally applied after normal DMDAS scoring so the
+     * production scheduling policy remains unchanged unless the explicit
+     * environment variable is set.
+     *
+     * GPU1 mapping:
+     *   worker 0 = CPU
+     *   worker 1 = CUDA / P100
+     */
+    if (const char *force_env =
+            getenv("OMPCLUSTER_DMDAS_FORCE_WORKER")) {
+
+        int forced_worker = atoi(force_env);
+
+        if (forced_worker >= 0 &&
+            static_cast<size_t>(forced_worker) < g_workers.size()) {
+
+            best_worker = &g_workers[forced_worker];
+
+            /*
+             * Recompute the selected worker's predicted availability.
+             * This value is only bookkeeping during calibration; the
+             * measured execution time remains the value recorded by the
+             * performance model callback.
+             */
+            best_cost = best_worker->available_time;
+            best_score = best_cost - task->bottom_level;
+
+            if (getenv("OMPCLUSTER_DMDAS_PLACEMENT_DEBUG")) {
+                fprintf(
+                    stderr,
+                    "[DMDAS-FORCE-WORKER] task=%d model=%zx "
+                    "worker=%d device=%d type=%d\\n",
+                    task->instance_id,
+                    task->model_id,
+                    best_worker->id,
+                    best_worker->device_id,
+                    best_worker->device_type);
+            }
+        }
+    }
+
+    if (getenv("OMPCLUSTER_DMDAS_PLACEMENT_DEBUG") &&
+        best_worker != nullptr) {
+        fprintf(
+            stderr,
+            "[DMDAS-SELECT] task=%d model=%zx features=%zu "
+            "worker=%d device=%d type=%d "
+            "cost=%.9g score=%.9g\n",
+            task->instance_id,
+            task->model_id,
+            task->perf_features.values.size(),
+            best_worker->id,
+            best_worker->device_id,
+            best_worker->device_type,
+            best_cost,
+            best_score);
     }
 
     if (task->model_id != 0 && task->transfers.empty()) {
@@ -2075,8 +2194,22 @@ double PerformanceModel::compute_cost(
 {
 
 
+    /*
+     * model_id == 0 means that this task has no identifiable target
+     * kernel (no td_target_info / outlined_fn_id).
+     *
+     * Do not inject an arbitrary 10-second compute cost into the
+     * worker availability timeline.  Keep an environment override
+     * for controlled ablation/reproduction of the legacy behaviour.
+     */
     if (task->model_id == 0) {
-        return 10.0; // estimation temporaire par défaut
+        const char *env =
+            getenv("OMPCLUSTER_DMDAS_NON_TARGET_COST");
+
+        if (env != nullptr)
+            return atof(env);
+
+        return 0.0;
     }
 
     build_default_perf_features(task);
@@ -2182,12 +2315,22 @@ static double transfer_time(
     if (src == dst)
         return 0.0;
 
-    if (src->bandwidth <= 0.0)
+    if (dst->id < 0 ||
+        static_cast<size_t>(dst->id) >= src->bandwidth.size())
         return 0.0;
 
-    return src->latency +
+    double bandwidth =
+        src->bandwidth[dst->id];
+
+    double latency =
+        src->latency[dst->id];
+
+    if (bandwidth <= 0.0)
+        return 0.0;
+
+    return latency +
            static_cast<double>(bytes) /
-           src->bandwidth;
+           bandwidth;
 }
 
 double RuntimeDataManager::transfer_cost(
@@ -2244,10 +2387,8 @@ void __kmp_dmdas_native_ready(kmp_task_t *omp_task)
 
     task->native_ready = true;
 
-
     if (task->remaining_dependencies.load() == 0 &&
         !task->submitted) {
-
         g_scheduler.submit(task);
         scheduler_pending.store(true);
     }
@@ -2292,8 +2433,44 @@ void __kmp_dmdas_init(int /*nworkers*/)
             g_workers[device];
 
         node.id = device;
-        node.bandwidth = default_bandwidth;   // 1 GB/s, valeur provisoire
-        node.latency = default_latency;    // 0.8 ms mesuré environ
+        node.bandwidth.assign(
+            ndevices, default_bandwidth);
+        node.latency.assign(
+            ndevices, default_latency);
+
+        /*
+         * Communication parameters can be overridden for each
+         * directional device pair:
+         *
+         * OMPCLUSTER_DMDAS_BANDWIDTH_<SRC>_<DST>
+         * OMPCLUSTER_DMDAS_LATENCY_<SRC>_<DST>
+         */
+        for (int dst = 0; dst < ndevices; ++dst) {
+            if (dst == device) {
+                node.bandwidth[dst] = default_bandwidth;
+                node.latency[dst] = 0.0;
+                continue;
+            }
+
+            char name[128];
+
+            snprintf(
+                name, sizeof(name),
+                "OMPCLUSTER_DMDAS_BANDWIDTH_%d_%d",
+                device, dst);
+
+            if (const char *env = getenv(name))
+                node.bandwidth[dst] = atof(env);
+
+            snprintf(
+                name, sizeof(name),
+                "OMPCLUSTER_DMDAS_LATENCY_%d_%d",
+                device, dst);
+
+            if (const char *env = getenv(name))
+                node.latency[dst] = atof(env);
+        }
+
         node.workers.clear();
 
         worker.id = device;
@@ -2327,9 +2504,31 @@ void __kmp_dmdas_init(int /*nworkers*/)
                 perf_model_path.c_str());
 
         if (loaded > 0) {
+            /*
+             * By default, preserve the existing behaviour: a model loaded
+             * from disk is frozen and used only for prediction.
+             *
+             * In explicit training mode, however, keep the loaded
+             * sufficient statistics (n, X^T X, X^T y, ...) trainable so
+             * that subsequent executions can extend the model.
+             */
+            const char *training_env =
+                getenv("OMPCLUSTER_PERF_MODEL_TRAINING");
+
+            bool training =
+                training_env != nullptr &&
+                strcmp(training_env, "0") != 0;
+
             g_perf_model_frozen.store(
-                true,
+                !training,
                 std::memory_order_relaxed);
+
+            printf(
+                "PERF MODEL: loaded %d entries (%s)\n",
+                loaded,
+                training
+                    ? "training continues"
+                    : "frozen");
         }
     }
 }
@@ -2378,8 +2577,35 @@ void __kmp_dmdas_reset_for_replay()
 
     ++replay;
 
-    if (replay == 1)
-        save_and_freeze_perf_model_locked();
+    if (replay == 1) {
+        const char *training_env =
+            getenv("OMPCLUSTER_PERF_MODEL_TRAINING");
+
+        bool training =
+            training_env != nullptr &&
+            strcmp(training_env, "0") != 0;
+
+        if (training) {
+            /*
+             * Training mode spans TDG replays.  Save the current
+             * sufficient statistics, but keep the model trainable so
+             * later executions continue updating the same model.
+             */
+            std::string perf_model_path =
+                get_perf_model_path();
+
+            if (!perf_model_path.empty()) {
+                g_perf_model.save(
+                    perf_model_path.c_str());
+            }
+        } else {
+            /*
+             * Default behaviour: learn from the first execution,
+             * then freeze the model for subsequent TDG replays.
+             */
+            save_and_freeze_perf_model_locked();
+        }
+    }
 
     /*
      * OpenMP tasks are reused during TDG replay, so only the DMDAS
@@ -2591,8 +2817,6 @@ void __kmpc_dmdas_record_kernel_time(
         return;
     }
 
-
-
     g_perf_model.record_execution(
         task,
         task->assigned_worker,
@@ -2667,6 +2891,7 @@ void __kmp_dmdas_notify_task_completed(kmp_task_t *omp_task)
         }
 
         DMDASTask *task = it->second;
+
         /*
         * Record the execution time before modifying the worker state.
         *
@@ -2681,34 +2906,10 @@ void __kmp_dmdas_notify_task_completed(kmp_task_t *omp_task)
                 worker->node;
 
             /*
-             * CPU target execution is synchronous. Measure it from the
-             * OpenMP task execution timestamps.
-             *
-             * CUDA execution is recorded separately using CUDA events via
-             * __kmpc_dmdas_record_kernel_time(), so do not record it here.
+             * Target execution time is recorded through
+             * __kmpc_dmdas_record_kernel_time() for both CPU and GPU
+             * target devices.  Do not record it again here.
              */
-            if (worker->device_type == 1 &&
-                task->model_id != 0 &&
-                task->execution_started) {
-
-                auto execution_end =
-                    std::chrono::high_resolution_clock::now();
-
-                double execution_duration =
-                    std::chrono::duration<double>(
-                        execution_end -
-                        task->execution_start
-                    ).count();
-
-                task->execution_started = false;
-
-                if (execution_duration > 0.0) {
-                    g_perf_model.record_execution(
-                        task,
-                        worker,
-                        execution_duration);
-                }
-            }
 
             for (size_t i = 0; i < task->deps.size(); ++i) {
 
@@ -2828,7 +3029,7 @@ kmp_int32 __kmp_dmdas_task_with_deps(
 kmp_taskdata_t *taskdata =
     KMP_TASK_TO_TASKDATA(new_task);
 
-g_task_id_map[taskdata->td_task_id] = task;
+    g_task_id_map[taskdata->td_task_id] = task;
 
 if (taskdata->td_target_info != nullptr &&
     taskdata->td_target_info->outlined_fn_id != nullptr) {
@@ -2886,6 +3087,17 @@ if (taskdata->td_target_info != nullptr &&
 
 
 
+    /*
+     * NOTE: The native OpenMP dependency tracker treats an OUT/INOUT
+     * following a set of readers differently from this simplified DMDAS
+     * dependency model. Native links the new OUT/INOUT task to the active
+     * reader set only, whereas DMDAS currently links it to both the last
+     * writer and active readers. This may introduce a redundant transitive
+     * edge (observed as 1025 DMDAS predecessors vs 1024 native predecessors
+     * in TaskBench 32x32). It did not affect the observed TaskBench
+     * execution, but should be revisited if exact dependency-graph
+     * equivalence is required.
+     */
     for (int i = 0; i < ndeps; ++i) {
         kmp_depend_info_t &dep = task->deps[i];
 
@@ -2937,10 +3149,11 @@ if (taskdata->td_target_info != nullptr &&
 
     g_task_map[new_task] = task;
 
-
-    if (task->remaining_dependencies.load() == 0)
-    {
+    if (task->remaining_dependencies.load() == 0 &&
+        task->native_ready &&
+        !task->submitted) {
         g_scheduler.submit(task);
+        scheduler_pending.store(true);
     }
 
 
