@@ -345,61 +345,6 @@ void BaseScheduler::addMemoryTasks(){
       kmp_int32 successor_rank =
           get_scheduleTask(KMP_TASKPTR_TO_TASKID(successor));
 
-      if (KMP_TASKPTR_TO_TASKID(task) == 71 &&
-          KMP_TASKPTR_TO_TASKID(successor) == 72) {
-        fprintf(stderr,
-                "[MT-71-72] src_args=%d dst_args=%d "
-                "src_deps=%d dst_deps=%d\n",
-                task->target_data ? task->target_data->num_args : -1,
-                successor->target_data ? successor->target_data->num_args : -1,
-                task->num_deps,
-                successor->num_deps);
-
-        if (task->target_data) {
-          for (kmp_int32 I = 0; I < task->target_data->num_args; ++I) {
-            fprintf(stderr,
-                    "[MT-71-ARG] I=%d base=%p arg=%p size=%lld type=0x%llx\n",
-                    I,
-                    task->target_data->args_base[I],
-                    task->target_data->args[I],
-                    static_cast<long long>(task->target_data->arg_sizes[I]),
-                    static_cast<unsigned long long>(
-                        task->target_data->arg_types[I]));
-          }
-        }
-
-        if (successor->target_data) {
-          for (kmp_int32 J = 0; J < successor->target_data->num_args; ++J) {
-            fprintf(stderr,
-                    "[MT-72-ARG] J=%d base=%p arg=%p size=%lld type=0x%llx\n",
-                    J,
-                    successor->target_data->args_base[J],
-                    successor->target_data->args[J],
-                    static_cast<long long>(
-                        successor->target_data->arg_sizes[J]),
-                    static_cast<unsigned long long>(
-                        successor->target_data->arg_types[J]));
-          }
-        }
-
-        for (kmp_int32 D = 0; D < task->num_deps; ++D) {
-          fprintf(stderr,
-                  "[MT-71-DEP] D=%d addr=%p in=%d out=%d\n",
-                  D,
-                  reinterpret_cast<void *>(task->deps[D].addr),
-                  task->deps[D].dep_type.in,
-                  task->deps[D].dep_type.out);
-        }
-
-        for (kmp_int32 D = 0; D < successor->num_deps; ++D) {
-          fprintf(stderr,
-                  "[MT-72-DEP] D=%d addr=%p in=%d out=%d\n",
-                  D,
-                  reinterpret_cast<void *>(successor->deps[D].addr),
-                  successor->deps[D].dep_type.in,
-                  successor->deps[D].dep_type.out);
-        }
-      }
     KG_TRACE(50,("[SCHEDULER-MT] successor %d; rank %d \n",KMP_TASKPTR_TO_TASKID(successor),successor_rank));
       if (successor_rank != task_rank ||
           isTargetDataTask(task) ||

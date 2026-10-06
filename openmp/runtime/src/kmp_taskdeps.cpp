@@ -233,18 +233,6 @@ static bool __kmp_depnode_replace_successor(kmp_int32 gtid,
 
   KMP_ACQUIRE_DEPNODE(gtid, source);
 
-  fprintf(stderr,
-          "[DEPNODE-REPLACE] source=%p old_target=%p new_target=%p\\n",
-          (void *)source, (void *)old_target, (void *)new_target);
-
-  for (kmp_depnode_list_t *it = source->dn.successors;
-       it != nullptr; it = it->next) {
-    fprintf(stderr,
-            "[DEPNODE-REPLACE]   successor=%p%s\\n",
-            (void *)it->node,
-            it->node == old_target ? " [MATCH]" : "");
-  }
-
   for (kmp_depnode_list_t *p = source->dn.successors;
        p != nullptr; p = p->next) {
 
@@ -270,30 +258,6 @@ static bool __kmp_depnode_restore_successor(
     return false;
 
   KMP_ACQUIRE_DEPNODE(gtid, source);
-
-  fprintf(stderr,
-          "[DEPNODE-RESTORE] source=%p memory=%p target=%p\n",
-          static_cast<void *>(source),
-          static_cast<void *>(memory),
-          static_cast<void *>(target));
-
-  for (kmp_depnode_list_t *it = source->dn.successors;
-       it != nullptr; it = it->next) {
-    kmp_task_t *SuccTask =
-        it->node ? it->node->dn.task : nullptr;
-
-    kmp_taskdata_t *SuccTaskData =
-        SuccTask ? KMP_TASK_TO_TASKDATA(SuccTask) : nullptr;
-
-    fprintf(stderr,
-            "[DEPNODE-RESTORE] successor=%p task=%p "
-            "task_id=%d tdg_id=%d%s\n",
-            static_cast<void *>(it->node),
-            static_cast<void *>(SuccTask),
-            SuccTaskData ? SuccTaskData->td_task_id : -1,
-            SuccTaskData ? SuccTaskData->td_tdg_task_id : -1,
-            it->node == memory ? " [MEMORY]" : "");
-  }
 
   for (kmp_depnode_list_t *p = source->dn.successors;
        p != nullptr; p = p->next) {
