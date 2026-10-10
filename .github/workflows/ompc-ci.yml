@@ -1,0 +1,47 @@
+name: OMPC CPU CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "openmp/**"
+      - "offload/**"
+      - ".github/workflows/ompc-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ompc-cpu:
+    name: Build and test OMPC (CPU)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build cmake clang lld \
+            libmpich-dev mpich python3
+
+      - name: Configure LLVM and OMPC
+        run: |
+          cmake -S llvm -B build-ompc-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_ENABLE_PROJECTS=clang \
+            -DLLVM_ENABLE_RUNTIMES="openmp;offload" \
+            -DLLVM_ENABLE_ASSERTIONS=ON \
+            -DLIBOMPTARGET_BUILD_CUDA_PLUGIN=OFF \
+            -DLIBOMPTARGET_BUILD_AMDGPU_PLUGIN=OFF \
+            -DLIBOMPTARGET_BUILD_DEVICERTL_BCLIB=OFF \
+            -DRUNTIMES_CMAKE_ARGS="-DMPI_C_COMPILER=/usr/bin/mpicc;-DMPI_CXX_COMPILER=/usr/bin/mpicxx"
+
+      - name: Build OMPC
+        run: cmake --build build-ompc-ci --target clang openmp offload --parallel 2
+
+      - name: Run OpenMP tests
+        run: cmake --build build-ompc-ci --target check-openmp --parallel 2
