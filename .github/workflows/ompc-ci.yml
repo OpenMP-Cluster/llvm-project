@@ -36,13 +36,12 @@ jobs:
             -DLLVM_ENABLE_RUNTIMES="openmp;offload" \
             -DLLVM_ENABLE_ASSERTIONS=ON \
             -DLLVM_TARGETS_TO_BUILD=X86 \
-            -DLIBOMPTARGET_BUILD_CUDA_PLUGIN=OFF \
-            -DLIBOMPTARGET_BUILD_AMDGPU_PLUGIN=OFF \
+            -DLIBOMPTARGET_PLUGINS_TO_BUILD="mpi;host" \
             -DLIBOMPTARGET_BUILD_DEVICERTL_BCLIB=OFF \
             -DRUNTIMES_CMAKE_ARGS="-DMPI_C_COMPILER=/usr/bin/mpicc;-DMPI_CXX_COMPILER=/usr/bin/mpicxx"
 
       - name: Build OMPC
-        run: cmake --build build-ompc-ci --target clang openmp offload --parallel 2
+        run: cmake --build build-ompc-ci --target clang runtimes --parallel 2
 
       - name: Run OpenMP tests
         run: cmake --build build-ompc-ci --target check-openmp --parallel 2
