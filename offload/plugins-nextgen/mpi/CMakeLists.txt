@@ -32,6 +32,7 @@ target_sources(omptarget.rtl.mpi PRIVATE
 
 target_link_libraries(omptarget.rtl.mpi PRIVATE
   EventSystem
+  MPI::MPI_CXX
 )
 
 # Add include directories
