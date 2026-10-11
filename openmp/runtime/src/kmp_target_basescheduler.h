@@ -45,7 +45,7 @@ enum class NonTaskScheduler {
 
 class BaseScheduler {
 private:
-  int remaining_target_tasks;
+  std::atomic<int> remaining_target_tasks;
 
   // Info for non-nowait target round-robin scheduling.
   std::atomic<size_t> non_nowait_counter;
@@ -62,7 +62,8 @@ protected:
   kmp_int32 graph_counter;
 
   kmp_int32 schedulingThread = -1;
-  bool isScheduleDone;
+  std::atomic<bool> isScheduleDone;
+  std::atomic<bool> hasAcquiredGraph{false};
   kmp_tdg_info *tdg;
 
   // Scheduling policies
@@ -89,7 +90,7 @@ public:
   kmp_target_dep getDep(kmp_int32 task_id, kmp_int64 addr);
   TaskScheduleData getTask(kmp_int32 task_id);
 
-  void waitScheduleGraph();
+  void waitScheduleGraph(kmp_int32 gtid);
   void setIsScheduleDone(bool state);
   void setSchedulingThread(kmp_int32 gtid);
   void resetSchedulingThread();

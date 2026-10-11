@@ -138,6 +138,7 @@ void BaseScheduler::acquireNewGraph(kmp_tdg_info_t* new_tdg) {
   }
   // dumpTaskGraph();
   graph_counter++;
+  hasAcquiredGraph.store(true);
   KG_TRACE(10,("acquireNewGraph Exit\n"));
 }
 
@@ -145,8 +146,23 @@ void BaseScheduler::acquireAndScheduleGraph(kmp_tdg_info_t* tdg) {
   // Acquire a new graph and reset the scheduler when we have no task scheduled.
 
   KG_TRACE(10,("acquireAndScheduleGraph Start\n"));
+  isScheduleDone = false;
   acquireNewGraph(tdg);
   assertm(tdg != nullptr, "Task Map should not be null at this point");
+
+  // Classical OpenMP tasks do not require target-device scheduling.
+  bool has_target_tasks = false;
+  for (kmp_int32 i = 0; i < tdg->num_tasks; ++i) {
+    if (tdg->record_map[i].is_target_task) {
+      has_target_tasks = true;
+      break;
+    }
+  }
+
+  if (!has_target_tasks) {
+    isScheduleDone = 1;
+    return;
+  }
 
   // Schedule the graph.
   if(initial_schedule_policy == 1 && scheduling_iteration_counter < initial_iteration) {
@@ -212,7 +228,10 @@ kmp_int32 BaseScheduler::scheduleTask(kmp_int32 task_id) {
 
 kmp_int32 BaseScheduler::get_scheduleTask(kmp_int32 task_id){
   KG_TRACE(50,("[SCHEDULER] get_scheduleTask: task_id: %d\n",task_id));
-  assert(tdg != nullptr);
+  // A task may finish during TDG recording, before the scheduler acquires it.
+  // Use the default device when no graph has been acquired yet.
+  if (tdg == nullptr)
+    return 0;
 
   if(task_id == -1 || !(*get_schedule_map(tdg->tdg_id)).count(task_id))
     return 0;
@@ -447,9 +466,16 @@ void BaseScheduler::addMemoryTasks(){
   KG_TRACE(10,("[SCHEDULER-MT] Add Memory Tasks (exit)\n"));
 }
 
-void BaseScheduler::waitScheduleGraph(){
+void BaseScheduler::waitScheduleGraph(kmp_int32 gtid){
 
-  while(!isScheduleDone && !areTargetTaskRemaining()){
+  // Do not block ordinary tasks before the first TDG is acquired,
+  // or when no target tasks require scheduling.
+  if (!hasAcquiredGraph.load() || !areTargetTaskRemaining())
+    return;
+
+  while (!(KMP_HIDDEN_HELPER_THREAD(gtid) &&
+           TCR_4(__kmp_hidden_helper_team_done)) &&
+         !isScheduleDone && areTargetTaskRemaining()) {
     std::this_thread::sleep_for(std::chrono::microseconds(10));
   }
 }    

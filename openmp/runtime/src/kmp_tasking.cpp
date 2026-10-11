@@ -1218,7 +1218,9 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
 
   if (completed) {
 #if OMPX_TASKGRAPH
-    if (is_taskgraph && !__kmp_use_dmdas_runtime()) {
+    // CPU-only taskgraphs have no target-device profiling entries.
+    if (is_taskgraph && !__kmp_use_dmdas_runtime() &&
+        __kmpc_get_num_devices() > 0) {
       __kmp_add_task_time(gtid, taskdata);
     }
 #endif
@@ -2274,6 +2276,10 @@ kmp_int32 __kmp_omp_task(kmp_int32 gtid, kmp_task_t *new_task,
       tdg->record_map[new_taskdata->td_tdg_task_id].task = new_task;
       tdg->record_map[new_taskdata->td_tdg_task_id].parent_task =
           new_taskdata->td_parent;
+      tdg->record_map[new_taskdata->td_tdg_task_id].is_target_task =
+          (new_taskdata->td_target_info != nullptr);
+      tdg->record_map[new_taskdata->td_tdg_task_id].target_data =
+          new_taskdata->td_target_info;
       KMP_ATOMIC_INC(&tdg->num_tasks);
     }
   }
@@ -5874,7 +5880,9 @@ if (__kmp_use_dmdas_runtime()) {
 
 
   // KG_TRACE(10, ("this_num_tasks = %d\n", KMP_ATOMIC_LD_RLX(&tdg->num_tasks)));
-  KMP_ATOMIC_ST_RLX(&(KMP_TASK_TO_TASKDATA(this_record_map[0].task)->td_taskgroup->count), 0);
+  // Do not reset the recorded task's taskgroup here: it belongs to the
+  // previous execution and may have been freed. The current taskgroup
+  // starts with a zero count and is updated when tasks are rebound below.
 
   KH_TRACE(30, ("Number of task in tdg: %d,num normal task:%d, children: %d\n",KMP_ATOMIC_LD_RLX(&tdg->num_tasks),KMP_ATOMIC_LD_RLX(&tdg->num_normal_tasks),KMP_ATOMIC_LD_RLX(&this_record_map[0].parent_task->td_incomplete_child_tasks)));
   for (kmp_int32 j = 0; j < KMP_ATOMIC_LD_RLX(&tdg->num_tasks); j++) {

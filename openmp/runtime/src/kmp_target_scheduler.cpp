@@ -203,7 +203,7 @@ void __kmpc_waitScheduleGraph(){
     __kmpc_InitScheduler();
   }
   // KG_TRACE(90,("__kmpc_waitScheduleGraph Start\n"));
-  scheduler->waitScheduleGraph();
+  scheduler->waitScheduleGraph(__kmp_get_gtid());
   // KG_TRACE(90,("__kmpc_waitScheduleGraph Exit End Wait\n"));
 }
 
@@ -339,7 +339,8 @@ void __kmpc_reset_scheduler_barrier() {
   }
 
   BaseScheduler::LockGuard SchLk(scheduler);
-  scheduler->setIsScheduleDone(false);
+  // Ordinary OpenMP task-barrier exits must not invalidate a completed
+  // scheduling operation. The scheduler manages its own scheduling state.
   scheduler->resetSchedulingThread();
 }
 

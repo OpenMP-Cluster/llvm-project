@@ -3760,7 +3760,7 @@ CGOpenMPRuntime::emitTaskInit(CodeGenFunction &CGF, SourceLocation Loc,
     else {
         AllocArgs.push_back(llvm::ConstantPointerNull::get(CGF.VoidPtrPtrTy));
         AllocArgs.push_back(llvm::ConstantPointerNull::get(CGF.VoidPtrPtrTy));
-        AllocArgs.push_back(llvm::ConstantInt::get(CGF.Int32Ty, 0));
+        AllocArgs.push_back(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(CGF.Int64Ty)));
     }
     // Push target/outlined function MapTypesArray
     if (Data.TargetInfo.MapTypesArray)
