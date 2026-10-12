@@ -41,6 +41,25 @@ jobs:
           echo "=== Installed OpenMP packages ==="
           dpkg-query -W 'libomp*' 2>/dev/null || true
 
+
+      - name: Compare LLVM 18 OpenMP topology methods
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libomp-18-dev
+
+          clang-18 -fopenmp -D_GNU_SOURCE \
+            openmp/runtime/test/affinity/omp-places.c \
+            -o /tmp/omp-places-diagnostic
+
+          for method in all cpuinfo apicid; do
+            echo "=== KMP_TOPOLOGY_METHOD=$method ==="
+            KMP_TOPOLOGY_METHOD="$method" \
+            KMP_AFFINITY=verbose \
+            OMP_PLACES=cores \
+            /tmp/omp-places-diagnostic && status=0 || status=$?
+            echo "EXIT_STATUS=$status"
+          done
+
   ompc-cpu:
     if: false  # Temporarily disabled for topology diagnostics
     name: Build and test OMPC (CPU)
