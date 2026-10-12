@@ -31,6 +31,16 @@ jobs:
           echo "=== CPUINFO topology ==="
           grep -E '^(processor|physical id|core id|apicid|initial apicid)[[:space:]]*:' /proc/cpuinfo
 
+
+      - name: Inspect installed OpenMP runtimes
+        run: |
+          echo "=== Clang ==="
+          clang --version || true
+          echo "=== OpenMP libraries ==="
+          ldconfig -p | grep -E 'lib(omp|gomp)\.so' || true
+          echo "=== Installed OpenMP packages ==="
+          dpkg-query -W 'libomp*' 2>/dev/null || true
+
   ompc-cpu:
     if: false  # Temporarily disabled for topology diagnostics
     name: Build and test OMPC (CPU)
