@@ -45,6 +45,13 @@ jobs:
           dpkg-query -W 'libomp*' 2>/dev/null || true
 
 
+      - name: Inspect legacy APIC CPUID decoding
+        run: |
+          gcc -Wall -Wextra -Werror -O0 \
+            .github/scripts/ompc-cpuid-diagnostic.c \
+            -o /tmp/ompc-cpuid-diagnostic
+          /tmp/ompc-cpuid-diagnostic
+
       - name: Compare LLVM 18 OpenMP topology methods
         run: |
           sudo apt-get update -qq
