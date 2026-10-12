@@ -16,6 +16,9 @@ jobs:
     name: Diagnose GitHub runner CPU topology
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Inspect CPU topology
         run: |
           echo "=== CPU model and topology ==="
