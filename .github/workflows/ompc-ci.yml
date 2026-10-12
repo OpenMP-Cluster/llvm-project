@@ -50,7 +50,6 @@ jobs:
           taskset -pc $$
           echo "=== CPU topology details ==="
           lscpu -e=CPU,CORE,SOCKET,ONLINE
-          echo "=== OpenMP affinity tests ==="
-          build-ompc-ci/bin/llvm-lit -sv \
-            --filter='affinity/(kmp-affinity|omp-places)\.c' \
-            build-ompc-ci/runtimes/runtimes-bins/openmp/runtime/test
+
+      - name: Run OpenMP tests
+        run: cmake --build build-ompc-ci --target check-openmp --parallel 2
