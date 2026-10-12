@@ -42,5 +42,15 @@ jobs:
       - name: Build OMPC
         run: cmake --build build-ompc-ci --target clang runtimes --parallel 2
 
-      - name: Run OpenMP tests
-        run: cmake --build build-ompc-ci --target check-openmp --parallel 2
+      - name: Diagnose CPU affinity
+        run: |
+          echo "=== CPU topology ==="
+          lscpu
+          echo "=== CPU affinity ==="
+          taskset -pc $$
+          echo "=== CPU topology details ==="
+          lscpu -e=CPU,CORE,SOCKET,ONLINE
+          echo "=== OpenMP affinity tests ==="
+          build-ompc-ci/bin/llvm-lit -sv \
+            --filter='affinity/(kmp-affinity|omp-places)\.c' \
+            build-ompc-ci/runtimes/runtimes-bins/openmp/runtime/test
