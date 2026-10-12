@@ -71,7 +71,6 @@ jobs:
           done
 
   ompc-cpu:
-    if: false  # Temporarily disabled for topology diagnostics
     name: Build and test OMPC (CPU)
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -111,4 +110,6 @@ jobs:
           lscpu -e=CPU,CORE,SOCKET,ONLINE
 
       - name: Run OpenMP tests
+        env:
+          KMP_TOPOLOGY_METHOD: cpuinfo
         run: cmake --build build-ompc-ci --target check-openmp --parallel 2
