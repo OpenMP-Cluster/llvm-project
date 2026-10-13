@@ -1,0 +1,40 @@
+name: OMPC CPU CI (self-hosted)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "openmp/**"
+      - "offload/**"
+      - ".github/workflows/ompc-ci-self-hosted.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ompc-cpu-self-hosted:
+    name: Build and test OMPC (self-hosted)
+    runs-on: [self-hosted, ompc-ci]
+    timeout-minutes: 240
+
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bootstrap Clang
+        run: /home/ompc/tools/llvm/bootstrap-clang.sh "$GITHUB_WORKSPACE"
+
+      - name: Build OpenMP and offload runtimes
+        run: /home/ompc/tools/llvm/build-runtimes.sh "$GITHUB_WORKSPACE" "$BUILD_DIR"
+
+      - name: Show sccache statistics
+        if: always()
+        run: sccache --show-stats || true
+
+      - name: Run OpenMP tests
+        env:
+          CHECK_OPENMP_ENV: KMP_TOPOLOGY_METHOD=cpuinfo
+        run: cmake --build "$BUILD_DIR" --target check-openmp --parallel 2
