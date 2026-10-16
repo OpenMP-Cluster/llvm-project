@@ -38,3 +38,81 @@ jobs:
         env:
           CHECK_OPENMP_ENV: KMP_TOPOLOGY_METHOD=cpuinfo
         run: cmake --build "$BUILD_DIR" --target check-openmp --parallel 2
+
+      - name: Checkout TaskBench
+        uses: actions/checkout@v4
+        with:
+          repository: OpenMP-Cluster/task-bench
+          ref: ci-scheduling-tests
+          path: task-bench
+
+      - name: Build TaskBench
+        env:
+          OMPC_RUNTIMES_BUILD: ${{ env.BUILD_DIR }}
+        run: |
+          set -euo pipefail
+          export PATH="/home/ompc/tools/llvm/builds/host/release/bin:$PATH"
+          export LD_LIBRARY_PATH="$BUILD_DIR/openmp/runtime/src:/home/ompc/tools/llvm/builds/host/release/lib:${LD_LIBRARY_PATH:-}"
+          make -C task-bench/core -j4 CC=clang CXX=clang++
+          make -C task-bench/ompcluster -j4 CXX=clang++ CUDA=0
+
+      - name: Run TaskBench scheduling tests
+        run: |
+          set -euo pipefail
+
+          export PATH="/home/ompc/tools/llvm/builds/host/release/bin:$PATH"
+          export LD_LIBRARY_PATH="$BUILD_DIR/openmp/runtime/src:/home/ompc/tools/llvm/builds/host/release/lib:${LD_LIBRARY_PATH:-}"
+
+          export OMPCLUSTER_TASKBENCH_ITERATION_NUMBER=1
+          export OMP_NUM_THREADS=4
+          export LIBOMP_NUM_HIDDEN_HELPER_THREADS=4
+          export OMPCLUSTER_NUM_EXEC_EVENT_HANDLERS=2
+          export UCX_TLS=self,sysv,tcp
+          export OMP_TARGET_OFFLOAD=MANDATORY
+          export LIBOMPTARGET_DEBUG=1
+
+          cd task-bench
+
+          run_test() {
+            local name="$1"
+            local scheduler="$2"
+            local binary="$3"
+
+            echo "=== $name ==="
+
+            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_PERF_MODEL_DIR
+            unset OMPCLUSTER_PERF_MODEL_TRAINING
+            unset OMPCLUSTER_PERF_SAMPLES
+
+            if [[ "$scheduler" == "dmdas" ]]; then
+              export OMPCLUSTER_RUNTIME=dmdas
+            else
+              export OMPCLUSTER_SCHEDULER="$scheduler"
+            fi
+
+            timeout 60s mpirun \
+              -np 2 llvm-offload-mpi-proxy-device \
+              : -np 1 "./ompcluster/$binary" \
+              -steps 4 -width 4 \
+              -type trivial \
+              -kernel compute_bound \
+              -iter 1000 \
+              2>&1 | tee "$name.log"
+
+            grep -q 'Elapsed Time' "$name.log"
+          }
+
+          run_test dmdas-tdg dmdas main
+          run_test dmdas-no-tdg dmdas main_no_datamap
+          run_test legacy-heft-tdg heft_legacy main
+          run_test legacy-heft-no-tdg heft_legacy main_no_datamap
+          run_test heft-tdg heft main
+
+      - name: Upload TaskBench logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskbench-scheduling-logs
+          path: task-bench/*.log
+          if-no-files-found: ignore
