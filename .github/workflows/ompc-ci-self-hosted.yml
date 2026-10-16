@@ -110,6 +110,94 @@ jobs:
           run_test legacy-heft-no-tdg heft_legacy main_no_datamap
           # run_test heft-tdg heft main  # TODO: SIGSEGV dans BaseScheduler::scheduleTask()
 
+      - name: Build instrumented OpenMP runtime
+        run: |
+          /home/ompc/tools/llvm/build-runtimes-coverage.sh \
+            "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/build-coverage"
+
+      - name: Collect TaskBench coverage
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$GITHUB_WORKSPACE/coverage-data"
+
+          export PATH="/home/ompc/tools/llvm/builds/host/release/bin:$PATH"
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-coverage/openmp/runtime/src:/home/ompc/tools/llvm/builds/host/release/lib:${LD_LIBRARY_PATH:-}"
+
+          export OMPCLUSTER_TASKBENCH_ITERATION_NUMBER=1
+          export OMP_NUM_THREADS=4
+          export LIBOMP_NUM_HIDDEN_HELPER_THREADS=4
+          export OMPCLUSTER_NUM_EXEC_EVENT_HANDLERS=2
+          export UCX_TLS=self,sysv,tcp
+          export OMP_TARGET_OFFLOAD=MANDATORY
+
+          cd task-bench
+
+          run_coverage() {
+            local name="$1" scheduler="$2" binary="$3"
+
+            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_PERF_MODEL_DIR OMPCLUSTER_PERF_MODEL_TRAINING OMPCLUSTER_PERF_SAMPLES
+
+            if [[ "$scheduler" == "dmdas" ]]; then
+              export OMPCLUSTER_RUNTIME=dmdas
+            else
+              export OMPCLUSTER_SCHEDULER="$scheduler"
+            fi
+
+            export LLVM_PROFILE_FILE="$GITHUB_WORKSPACE/coverage-data/${name}-%p.profraw"
+
+            timeout 60s mpirun \
+              -np 2 llvm-offload-mpi-proxy-device \
+              : -np 1 "./ompcluster/$binary" \
+              -steps 4 -width 4 -type trivial \
+              -kernel compute_bound -iter 1000 \
+              2>&1 | tee "coverage-${name}.log"
+
+            grep -q 'Elapsed Time' "coverage-${name}.log"
+          }
+
+          run_coverage dmdas-tdg dmdas main
+          run_coverage dmdas-no-tdg dmdas main_no_datamap
+          run_coverage legacy-heft-tdg heft_legacy main
+          run_coverage legacy-heft-no-tdg heft_legacy main_no_datamap
+
+      - name: Generate LLVM coverage report
+        run: |
+          set -euo pipefail
+
+          LLVM_BIN=/home/ompc/tools/llvm/builds/host/release/bin
+          LIBOMP="$GITHUB_WORKSPACE/build-coverage/openmp/runtime/src/libomp.so"
+          COVERAGE_DIR="$GITHUB_WORKSPACE/coverage-data"
+
+          "$LLVM_BIN/llvm-profdata" merge -sparse \
+            "$COVERAGE_DIR"/*.profraw \
+            -o "$COVERAGE_DIR/coverage.profdata"
+
+          "$LLVM_BIN/llvm-cov" report "$LIBOMP" \
+            -instr-profile="$COVERAGE_DIR/coverage.profdata" \
+            -ignore-filename-regex='(/usr/|/third-party/)' \
+            > "$COVERAGE_DIR/summary.txt"
+
+          "$LLVM_BIN/llvm-cov" show "$LIBOMP" \
+            -instr-profile="$COVERAGE_DIR/coverage.profdata" \
+            -format=html \
+            -output-dir="$COVERAGE_DIR/html" \
+            -ignore-filename-regex='(/usr/|/third-party/)'
+
+          cat "$COVERAGE_DIR/summary.txt"
+
+      - name: Upload LLVM coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ompc-llvm-coverage
+          path: |
+            coverage-data/html/
+            coverage-data/summary.txt
+            coverage-data/coverage.profdata
+          if-no-files-found: warn
+
       - name: Upload TaskBench logs
         if: always()
         uses: actions/upload-artifact@v4
