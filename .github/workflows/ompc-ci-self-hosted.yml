@@ -53,6 +53,7 @@ jobs:
           set -euo pipefail
           export PATH="/home/ompc/tools/llvm/builds/host/release/bin:$PATH"
           export LD_LIBRARY_PATH="$BUILD_DIR/openmp/runtime/src:/home/ompc/tools/llvm/builds/host/release/lib:${LD_LIBRARY_PATH:-}"
+          export LIBRARY_PATH="$BUILD_DIR/openmp/runtime/src:/home/ompc/tools/llvm/builds/host/release/lib:${LIBRARY_PATH:-}"
           make -C task-bench/core -j4 CC=clang CXX=clang++
           make -C task-bench/ompcluster -j4 CXX=clang++ CUDA=0
 
