@@ -24,6 +24,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch SonarQube target branch
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ompc-2:refs/remotes/origin/ompc-2
 
       - name: Bootstrap Clang
         run: /home/ompc/tools/llvm/bootstrap-clang.sh "$GITHUB_WORKSPACE"
@@ -43,7 +49,6 @@ jobs:
       - name: Checkout TaskBench
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           repository: OpenMP-Cluster/task-bench
           ref: ci-scheduling-tests
           path: task-bench
@@ -192,6 +197,12 @@ jobs:
             -format=lcov \
             -ignore-filename-regex='(/usr/|/third-party/)' \
             > "$COVERAGE_DIR/coverage.info"
+
+          "$LLVM_BIN/llvm-cov" show "$LIBOMP" \
+            -instr-profile="$COVERAGE_DIR/coverage.profdata" \
+            -format=text \
+            -ignore-filename-regex='(/usr/|/third-party/)' \
+            > "$COVERAGE_DIR/coverage.txt"
 
           cat "$COVERAGE_DIR/summary.txt"
 
