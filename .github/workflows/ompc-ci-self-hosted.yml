@@ -43,6 +43,7 @@ jobs:
       - name: Checkout TaskBench
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           repository: OpenMP-Cluster/task-bench
           ref: ci-scheduling-tests
           path: task-bench
