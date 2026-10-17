@@ -94,6 +94,7 @@ jobs:
             local name="$1"
             local scheduler="$2"
             local binary="$3"
+            local dmdas_config="${4:-}"
 
             echo "=== $name ==="
 
@@ -101,11 +102,18 @@ jobs:
             unset OMPCLUSTER_PERF_MODEL_DIR
             unset OMPCLUSTER_PERF_MODEL_TRAINING
             unset OMPCLUSTER_PERF_SAMPLES
+            unset OMPCLUSTER_DMDAS_FORCE_WORKER
+            unset OMPCLUSTER_DMDAS_NON_TARGET_COST
+            unset OMPCLUSTER_DMDAS_BANDWIDTH
 
             if [[ "$scheduler" == "dmdas" ]]; then
               export OMPCLUSTER_RUNTIME=dmdas
             else
               export OMPCLUSTER_SCHEDULER="$scheduler"
+            fi
+
+            if [[ -n "$dmdas_config" ]]; then
+              export "$dmdas_config"
             fi
 
             timeout 60s mpirun \
@@ -122,6 +130,9 @@ jobs:
 
           run_test dmdas-tdg dmdas main
           run_test dmdas-no-tdg dmdas main_no_datamap
+          run_test dmdas-force-worker dmdas main OMPCLUSTER_DMDAS_FORCE_WORKER=0
+          run_test dmdas-non-target-zero dmdas main OMPCLUSTER_DMDAS_NON_TARGET_COST=0
+          run_test dmdas-zero-bandwidth dmdas main OMPCLUSTER_DMDAS_BANDWIDTH=0
           run_test legacy-heft-tdg heft_legacy main
           run_test legacy-heft-no-tdg heft_legacy main_no_datamap
           # run_test heft-tdg heft main  # TODO: SIGSEGV dans BaseScheduler::scheduleTask()
@@ -150,10 +161,11 @@ jobs:
           cd task-bench
 
           run_coverage() {
-            local name="$1" scheduler="$2" binary="$3"
+            local name="$1" scheduler="$2" binary="$3" dmdas_config="${4:-}"
 
             unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
             unset OMPCLUSTER_PERF_MODEL_DIR OMPCLUSTER_PERF_MODEL_TRAINING OMPCLUSTER_PERF_SAMPLES
+            unset OMPCLUSTER_DMDAS_FORCE_WORKER OMPCLUSTER_DMDAS_NON_TARGET_COST OMPCLUSTER_DMDAS_BANDWIDTH
 
             if [[ "$scheduler" == "dmdas" ]]; then
               export OMPCLUSTER_RUNTIME=dmdas
@@ -162,6 +174,10 @@ jobs:
             fi
 
             export LLVM_PROFILE_FILE="$GITHUB_WORKSPACE/coverage-data/${name}-%p.profraw"
+
+            if [[ -n "$dmdas_config" ]]; then
+              export "$dmdas_config"
+            fi
 
             timeout 60s mpirun \
               -np 2 llvm-offload-mpi-proxy-device \
@@ -175,6 +191,9 @@ jobs:
 
           run_coverage dmdas-tdg dmdas main
           run_coverage dmdas-no-tdg dmdas main_no_datamap
+          run_coverage dmdas-force-worker dmdas main OMPCLUSTER_DMDAS_FORCE_WORKER=0
+          run_coverage dmdas-non-target-zero dmdas main OMPCLUSTER_DMDAS_NON_TARGET_COST=0
+          run_coverage dmdas-zero-bandwidth dmdas main OMPCLUSTER_DMDAS_BANDWIDTH=0
           run_coverage legacy-heft-tdg heft_legacy main
           run_coverage legacy-heft-no-tdg heft_legacy main_no_datamap
 
