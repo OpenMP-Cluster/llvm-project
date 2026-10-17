@@ -58,6 +58,8 @@ struct DeviceTy {
   /// Provide access to the mapping handler.
   MappingInfoTy &getMappingInfo() { return MappingInfo; }
 
+  DeviceType getDeviceType();
+
   llvm::Expected<__tgt_device_binary> loadBinary(__tgt_device_image *Img);
 
   // device memory allocation/deallocation routines

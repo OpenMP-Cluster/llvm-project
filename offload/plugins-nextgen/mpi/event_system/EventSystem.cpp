@@ -14,7 +14,6 @@
 #include "EventSystem.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -22,6 +21,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <mutex>
 
 #include <mpi.h>
 #include <unistd.h>
@@ -132,8 +132,6 @@ void EventTy::wait() {
 /// Advance the event to the next suspension point and wait a while
 void EventTy::advance() {
   resume();
-  std::this_thread::sleep_for(
-      std::chrono::microseconds(EventPollingRate.get()));
 }
 
 /// Check if the event has completed.
@@ -433,12 +431,41 @@ EventTy launchKernel(MPIRequestManagerTy RequestManager, void *TgtEntryPtr,
   RequestManager.send(TgtOffsets.get(), KernelArgs->NumArgs * sizeof(ptrdiff_t),
                       MPI_BYTE);
 
-  RequestManager.send(KernelArgs, sizeof(KernelArgsTy), MPI_BYTE);
+RequestManager.send(
+    KernelArgs,
+    sizeof(KernelArgsTy),
+    MPI_BYTE);
 
-  // Event completion notification
-  RequestManager.receive(nullptr, 0, MPI_BYTE);
+/* double KernelTime = 0.0;
 
-  co_return (co_await RequestManager);
+// Receive execution time measured by the remote worker.
+RequestManager.receive(
+    &KernelTime,
+    1,
+    MPI_DOUBLE);
+
+// Event completion notification.
+RequestManager.receive(
+    nullptr,
+    0,
+    MPI_BYTE);
+
+if (auto Error = co_await RequestManager; Error)
+    co_return Error;
+
+AsyncInfoPtr->KernelExecutionTime = KernelTime;*/
+
+
+  // Launch acknowledgement only.
+  RequestManager.receive(
+      nullptr,
+      0,
+      MPI_BYTE);
+
+  if (auto Err = co_await RequestManager; Err)
+    co_return Err;
+
+  co_return llvm::Error::success();
 }
 
 EventTy getGlobal(MPIRequestManagerTy RequestManager,
@@ -465,6 +492,11 @@ EventTy getFunction(MPIRequestManagerTy RequestManager,
 
   RequestManager.receive(KernelPtr, sizeof(void *), MPI_BYTE);
   RequestManager.receive(nullptr, 0, MPI_BYTE);
+  co_return (co_await RequestManager);
+}
+
+EventTy getDeviceType(MPIRequestManagerTy RequestManager, DeviceType *QueryResult) {
+  RequestManager.receive(QueryResult, sizeof(int), MPI_BYTE);
   co_return (co_await RequestManager);
 }
 
@@ -552,9 +584,25 @@ EventTy queryAsync(MPIRequestManagerTy RequestManager,
   if (auto Err = co_await RequestManager; Err)
     co_return Err;
 
+  double KernelTime = 0.0;
+
+  RequestManager.receive(
+    &KernelTime,
+    1,
+    MPI_DOUBLE);
+
   RequestManager.receive(nullptr, 0, MPI_BYTE);
 
-  co_return (co_await RequestManager);
+  if (auto Err = co_await RequestManager; Err)
+    co_return Err;
+
+  if (KernelTime > 0.0) {
+    AsyncInfoPtr->KernelExecutionTime =
+        KernelTime;
+
+  }
+
+  co_return llvm::Error::success();
 }
 
 EventTy printDeviceInfo(MPIRequestManagerTy RequestManager) {

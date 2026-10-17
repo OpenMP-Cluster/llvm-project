@@ -507,6 +507,26 @@ struct MPIPluginTy : public GenericPluginTy {
 
   const char *getName() const override { return GETNAME(TARGET_NAME); }
 
+  /// Get the type of an specific device
+  DeviceType getDeviceType(int32_t DeviceId) override {
+    DeviceType QueryResult = DeviceType::UNKNOWN_DEVICE;
+
+    EventTy Event = EventSystem.createEvent(OriginEvents::getDeviceType,
+                                            EventTypeTy::GET_DEVICE_TYPE,
+                                            DeviceId, &QueryResult);
+
+    if (Event.empty()) {
+      DP("Failed to create getDeviceType on Device %d\n", DeviceId);
+    }
+
+    Event.wait();
+    if (auto Err = Event.getError()) {
+      DP("Error querying the getDeviceType on Device %d\n", DeviceId);
+    }
+
+    return QueryResult;
+  }
+
   /// This plugin does not support exchanging data between two devices.
   bool isDataExchangable(int32_t SrcDeviceId, int32_t DstDeviceId) override {
     bool QueryResult = false;
@@ -897,7 +917,17 @@ struct MPIPluginTy : public GenericPluginTy {
       return OFFLOAD_FAIL;
     }
 
-    Queue->push_back(Event);
+    Event.wait();
+
+    if (auto Err = Event.getError()) {
+      REPORT("Failure on event at "
+             " on device %d: %s\n",
+             DeviceId, toString(std::move(Err)).data());
+      return OFFLOAD_FAIL;
+    }
+
+
+    // Queue->push_back(Event);
 
     return OFFLOAD_SUCCESS;
   }
@@ -923,7 +953,17 @@ struct MPIPluginTy : public GenericPluginTy {
       return OFFLOAD_FAIL;
     }
 
-    Queue->push_back(Event);
+    Event.wait();
+
+    if (auto Err = Event.getError()) {
+      REPORT("Failure on event at "
+             " on device %d: %s\n",
+             DeviceId, toString(std::move(Err)).data());
+      return OFFLOAD_FAIL;
+    }
+
+
+    // Queue->push_back(Event);
 
     return OFFLOAD_SUCCESS;
   }
@@ -962,7 +1002,16 @@ struct MPIPluginTy : public GenericPluginTy {
       return OFFLOAD_FAIL;
     }
 
-    Queue->push_back(Event);
+
+    Event.wait();
+
+    if (auto Err = Event.getError()) {
+      REPORT("Failure on event\n",
+              toString(std::move(Err)).data());
+      return OFFLOAD_FAIL;
+    }
+
+    // Queue->push_back(Event);
 
     return OFFLOAD_SUCCESS;
   }
@@ -1000,7 +1049,16 @@ struct MPIPluginTy : public GenericPluginTy {
       return OFFLOAD_FAIL;
     }
 
-    Queue->push_back(Event);
+    Event.wait();
+
+    if (auto Err = Event.getError()) {
+      REPORT("Failure on event at "
+             " on device %d: %s\n",
+             DeviceId, toString(std::move(Err)).data());
+      return OFFLOAD_FAIL;
+    }
+
+    // Queue->push_back(Event);
 
     return OFFLOAD_SUCCESS;
   }
@@ -1010,54 +1068,54 @@ struct MPIPluginTy : public GenericPluginTy {
     MPIEventQueuePtr Queue =
         reinterpret_cast<MPIEventQueuePtr>(AsyncInfoPtr->Queue);
 
-    EventTy Event = EventSystem.createEvent(OriginEvents::synchronize,
-                                            EventTypeTy::SYNCHRONIZE, DeviceId,
-                                            AsyncInfoPtr);
+    // EventTy Event = EventSystem.createEvent(OriginEvents::synchronize,
+    //                                         EventTypeTy::SYNCHRONIZE, DeviceId,
+    //                                         AsyncInfoPtr);
 
-    if (Event.empty()) {
-      REPORT("Failed to create synchronize event on device %d\n", DeviceId);
-      return OFFLOAD_FAIL;
-    }
+    // if (Event.empty()) {
+    //   REPORT("Failed to create synchronize event on device %d\n", DeviceId);
+    //   return OFFLOAD_FAIL;
+    // }
 
-    Queue->push_back(Event);
+    // Queue->push_back(Event);
 
-    auto EventIt = Queue->begin();
-    EventTypeTy CurrentEventType;
+    // auto EventIt = Queue->begin();
+    // EventTypeTy CurrentEventType;
 
-    while (EventIt != Queue->end()) {
-      CurrentEventType = EventIt->getEventType();
+    // while (EventIt != Queue->end()) {
+    //   CurrentEventType = EventIt->getEventType();
 
-      // Find the first event that differs in type from the current Event
-      auto EventRangeEnd = std::find_if(
-          EventIt, Queue->end(), [CurrentEventType](const EventTy &Event) {
-            return Event.getEventType() != CurrentEventType;
-          });
+    //   // Find the first event that differs in type from the current Event
+    //   auto EventRangeEnd = std::find_if(
+    //       EventIt, Queue->end(), [CurrentEventType](const EventTy &Event) {
+    //         return Event.getEventType() != CurrentEventType;
+    //       });
 
-      std::list<MPIEventQueue::iterator> PendingEvents;
-      for (auto It = EventIt; It != EventRangeEnd; ++It) {
-        PendingEvents.push_back(It);
-      }
+    //   std::list<MPIEventQueue::iterator> PendingEvents;
+    //   for (auto It = EventIt; It != EventRangeEnd; ++It) {
+    //     PendingEvents.push_back(It);
+    //   }
 
-      // Progress all the events in the range simultaneously
-      while (!PendingEvents.empty()) {
-        auto Event = PendingEvents.front();
-        PendingEvents.pop_front();
-        Event->resume();
+    //   // Progress all the events in the range simultaneously
+    //   while (!PendingEvents.empty()) {
+    //     auto Event = PendingEvents.front();
+    //     PendingEvents.pop_front();
+    //     Event->resume();
 
-        if (!Event->done()) {
-          PendingEvents.push_back(Event);
-          continue;
-        }
+    //     if (!Event->done()) {
+    //       PendingEvents.push_back(Event);
+    //       continue;
+    //     }
 
-        if (auto Error = Event->getError(); Error) {
-          REPORT("Event failed during synchronization. %s\n",
-                 toString(std::move(Error)).c_str());
-          return OFFLOAD_FAIL;
-        }
-      }
+    //     if (auto Error = Event->getError(); Error) {
+    //       REPORT("Event failed during synchronization. %s\n",
+    //              toString(std::move(Error)).c_str());
+    //       return OFFLOAD_FAIL;
+    //     }
+    //   }
 
-      EventIt = EventRangeEnd;
-    }
+    //   EventIt = EventRangeEnd;
+    // }
 
     // Once the queue is synchronized, return it to the pool and reset the
     // AsyncInfo. This is to make sure that the synchronization only works
@@ -1072,61 +1130,105 @@ struct MPIPluginTy : public GenericPluginTy {
     return OFFLOAD_SUCCESS;
   }
 
-  int32_t query_async(int32_t DeviceId,
-                      __tgt_async_info *AsyncInfoPtr) override {
-    auto *Queue = reinterpret_cast<MPIEventQueue *>(AsyncInfoPtr->Queue);
+  int32_t query_async(
+    int32_t DeviceId,
+    __tgt_async_info *AsyncInfoPtr) override
+{
+    auto *Queue =
+        reinterpret_cast<MPIEventQueue *>(AsyncInfoPtr->Queue);
 
-    EventTypeTy CurrentEventType;
-
-    // Returns success when there are pending operations in AsyncInfo, moving
-    // forward through the events on the queue until it is fully completed.
-    for (auto EventIt = Queue->begin(); EventIt != Queue->end();) {
-      CurrentEventType = EventIt->getEventType();
-      EventIt->resume();
-      auto NextEventIt = std::next(EventIt);
-      if (!EventIt->done() &&
-          ((CurrentEventType != EventTypeTy::SUBMIT &&
-            CurrentEventType != EventTypeTy::RETRIEVE) ||
-           (NextEventIt != Queue->end() &&
-            NextEventIt->getEventType() != CurrentEventType))) {
-        return OFFLOAD_SUCCESS;
-      }
-
-      if (EventIt->done()) {
-        if (auto Error = EventIt->getError(); Error) {
-          REPORT("Event failed during query. %s\n",
-                 toString(std::move(Error)).c_str());
-          return OFFLOAD_FAIL;
-        }
-        EventIt = Queue->erase(EventIt);
-        continue;
-      }
-
-      ++EventIt;
-    }
-
-    if (!Queue->empty())
-      return OFFLOAD_SUCCESS;
-
-    // Ensure all events in the device queue have completed before
-    // deallocating the host queue, preventing the device queue
-    // from holding resources unnecessarily.
-    EventTy Event = EventSystem.createEvent(OriginEvents::queryAsync,
-                                            EventTypeTy::QUERY_ASYNC, DeviceId,
-                                            AsyncInfoPtr);
+    EventTy Event =
+        EventSystem.createEvent(
+            OriginEvents::queryAsync,
+            EventTypeTy::QUERY_ASYNC,
+            DeviceId,
+            AsyncInfoPtr);
 
     if (Event.empty()) {
-      REPORT("Failed to create query_async event on device %d\n", DeviceId);
-      return OFFLOAD_FAIL;
+        REPORT(
+            "Failed to create query_async event "
+            "on device %d\n",
+            DeviceId);
+        return OFFLOAD_FAIL;
     }
 
     Event.wait();
 
     if (auto Error = Event.getError()) {
-      REPORT("Failure to query_async on device %d: %s\n", DeviceId,
-             toString(std::move(Error)).data());
-      return OFFLOAD_FAIL;
+        REPORT(
+            "Failure to query_async on device %d: %s\n",
+            DeviceId,
+            toString(std::move(Error)).data());
+        return OFFLOAD_FAIL;
     }
+
+    AsyncInfoPtr->Queue = nullptr;
+
+    if (auto Error = returnQueue(Queue)) {
+        REPORT(
+            "Failed to return async Queue: %s\n",
+            toString(std::move(Error)).c_str());
+        return OFFLOAD_FAIL;
+    }
+
+    return OFFLOAD_SUCCESS;
+}
+
+  /*int32_t query_async(int32_t DeviceId,
+                      __tgt_async_info *AsyncInfoPtr) override {
+    auto *Queue = reinterpret_cast<MPIEventQueue *>(AsyncInfoPtr->Queue);
+
+    // EventTypeTy CurrentEventType;
+
+    // // Returns success when there are pending operations in AsyncInfo, moving
+    // // forward through the events on the queue until it is fully completed.
+    // for (auto EventIt = Queue->begin(); EventIt != Queue->end();) {
+    //   CurrentEventType = EventIt->getEventType();
+    //   EventIt->resume();
+    //   auto NextEventIt = std::next(EventIt);
+    //   if (!EventIt->done() &&
+    //       ((CurrentEventType != EventTypeTy::SUBMIT &&
+    //         CurrentEventType != EventTypeTy::RETRIEVE) ||
+    //        (NextEventIt != Queue->end() &&
+    //         NextEventIt->getEventType() != CurrentEventType))) {
+    //     return OFFLOAD_SUCCESS;
+    //   }
+
+    //   if (EventIt->done()) {
+    //     if (auto Error = EventIt->getError(); Error) {
+    //       REPORT("Event failed during query. %s\n",
+    //              toString(std::move(Error)).c_str());
+    //       return OFFLOAD_FAIL;
+    //     }
+    //     EventIt = Queue->erase(EventIt);
+    //     continue;
+    //   }
+
+    //   ++EventIt;
+    // }
+
+    // if (!Queue->empty())
+    //   return OFFLOAD_SUCCESS;
+
+    // // Ensure all events in the device queue have completed before
+    // // deallocating the host queue, preventing the device queue
+    // // from holding resources unnecessarily.
+    // EventTy Event = EventSystem.createEvent(OriginEvents::queryAsync,
+    //                                         EventTypeTy::QUERY_ASYNC, DeviceId,
+    //                                         AsyncInfoPtr);
+
+    // if (Event.empty()) {
+    //   REPORT("Failed to create query_async event on device %d\n", DeviceId);
+    //   return OFFLOAD_FAIL;
+    // }
+
+    // Event.wait();
+
+    // if (auto Error = Event.getError()) {
+    //   REPORT("Failure to query_async on device %d: %s\n", DeviceId,
+    //          toString(std::move(Error)).data());
+    //   return OFFLOAD_FAIL;
+    // }
 
     // Once the queue is synchronized, return it to the pool and reset the
     // AsyncInfo. This is to make sure that the synchronization only works
@@ -1139,7 +1241,7 @@ struct MPIPluginTy : public GenericPluginTy {
     }
 
     return OFFLOAD_SUCCESS;
-  }
+  }*/
 
   void print_device_info(int32_t DeviceId) override {
     EventTy Event =

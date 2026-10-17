@@ -32,6 +32,7 @@ target_sources(omptarget.rtl.mpi PRIVATE
 
 target_link_libraries(omptarget.rtl.mpi PRIVATE
   EventSystem
+  MPI::MPI_CXX
 )
 
 # Add include directories
@@ -113,6 +114,7 @@ llvm_update_compile_flags(llvm-offload-mpi-proxy-device)
 
 target_link_libraries(llvm-offload-mpi-proxy-device PRIVATE
   EventSystem
+  MPI::MPI_CXX
   LLVMSupport
   LLVMFrontendOpenMP
   omp

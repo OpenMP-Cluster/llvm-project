@@ -155,6 +155,14 @@ class kmp_stats_list;
 #include "ompd-specific.h"
 #endif
 
+#if OMPX_TASKGRAPH 
+#include <string>
+#include <set>
+#include <chrono>
+#include <vector>
+#include <unordered_map>
+#endif
+
 #ifndef UNLIKELY
 #define UNLIKELY(x) (x)
 #endif
@@ -551,6 +559,8 @@ enum _reduction_method {
   tree_reduce_block = (3 << 8),
   empty_reduce_block = (4 << 8)
 };
+
+
 
 // Description of the packed_reduction_method variable:
 // The packed_reduction_method variable consists of two enum types variables
@@ -2648,6 +2658,9 @@ typedef struct {
 } kmp_event_t;
 
 #if OMPX_TASKGRAPH
+typedef struct kmp_target_task_data kmp_target_task_data_t;
+typedef struct kmp_target_dep kmp_target_dep_t;
+
 // Initial number of allocated nodes while recording
 #define INIT_MAPSIZE 50
 
@@ -2657,6 +2670,11 @@ typedef struct kmp_taskgraph_flags { /*This needs to be exactly 32 bits */
   unsigned reserved : 30;
 } kmp_taskgraph_flags_t;
 
+typedef struct kmp_recorded_task_time {
+  kmp_int32 mean_time;
+  kmp_int32 iteration_number;
+} kmp_recorded_task_time_t;
+
 /// Represents a TDG node
 typedef struct kmp_node_info {
   kmp_task_t *task; // Pointer to the actual task
@@ -2665,8 +2683,16 @@ typedef struct kmp_node_info {
   std::atomic<kmp_int32>
       npredecessors_counter; // Number of predessors on the fly
   kmp_int32 npredecessors; // Total number of predecessors
+  kmp_int32 *predecessors; // Array of the predecessors ids
   kmp_int32 successors_size; // Number of allocated succesors ids
+  kmp_int32 predecessors_size; // Number of allocated predecessors ids
   kmp_taskdata_t *parent_task; // Parent implicit task
+  bool is_target_task;
+  kmp_target_task_data_t *target_data; //We could find this info in taskdata->td_target_info TODO: use a smart pointer?
+  kmp_int32 num_deps; // Number of dependencies passed to this task
+  kmp_target_dep_t *deps; // Dependencies array
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_time; 
+  kmp_recorded_task_time_t* task_time;
 } kmp_node_info_t;
 
 /// Represent a TDG's current status
@@ -2676,9 +2702,31 @@ typedef enum kmp_tdg_status {
   KMP_TDG_READY = 2
 } kmp_tdg_status_t;
 
+///OMPC Scheduler
+enum class TaskState {
+  UNDEFINED = -1,
+  CREATED,
+  DEFERRED, // Only used by HEFTScheduler
+  SCHEDULED,
+  DISPATCHED,
+  EXECUTED,
+  FAILED,
+  SAVED
+};
+
+struct TaskScheduleData {
+  TaskState state;
+  int rank;
+  int thread;
+  int translated_rank;
+  const kmp_node_info *task;
+  std::string source_location;
+};
+
 /// Structure that contains a TDG
 typedef struct kmp_tdg_info {
   kmp_int32 tdg_id; // Unique idenfifier of the TDG
+  kmp_int32 initial_task_id; //Identifier of the first task of the TDG
   kmp_taskgraph_flags_t tdg_flags; // Flags related to a TDG
   kmp_int32 map_size; // Number of allocated TDG nodes
   kmp_int32 num_roots; // Number of roots tasks int the TDG
@@ -2693,6 +2741,8 @@ typedef struct kmp_tdg_info {
   void *rec_taskred_data; // Data to pass to __kmpc_task_reduction_init or
                           // __kmpc_taskred_init
   kmp_int32 rec_num_taskred;
+  bool is_scheduled = false;	
+  std::atomic<kmp_int32> num_normal_tasks; // Number of TDG nodes without memory tasks
 } kmp_tdg_info_t;
 
 extern int __kmp_tdg_dot;
@@ -2700,8 +2750,12 @@ extern kmp_int32 __kmp_max_tdgs;
 extern kmp_tdg_info_t **__kmp_global_tdgs;
 extern kmp_int32 __kmp_curr_tdg_idx;
 extern kmp_int32 __kmp_successors_size;
+extern kmp_int32 __kmp_predecessors_size;
 extern std::atomic<kmp_int32> __kmp_tdg_task_id;
 extern kmp_int32 __kmp_num_tdg;
+void __kmpc_set_deps(kmp_node_info* task, kmp_int32 ndeps,
+                     const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
+                     const kmp_depend_info_t *dep_list_noalias);
 #endif
 
 #ifdef BUILD_TIED_TASK_STACK
@@ -2791,15 +2845,6 @@ typedef struct kmp_tasking_flags { /* Total struct must be exactly 32 bits */
 
 typedef struct kmp_target_data {
   void *async_handle; // libomptarget async handle for task completion query
-
-  // More target task information to enable memory tasks
-  kmp_int64 device_id;  // Device ID
-  void *outlined_fn_id; // Target region/outlined function address
-  kmp_int32 num_args;   // Target region argument addresses and sizes
-  void **args_base;
-  void **args;
-  kmp_int64 *arg_sizes;
-  kmp_int64 *arg_types; // map types (to,from,...) of the target task args
 } kmp_target_data_t;
 
 struct kmp_taskdata { /* aligned during dynamic allocation       */
@@ -2846,10 +2891,12 @@ struct kmp_taskdata { /* aligned during dynamic allocation       */
 #endif
 #if OMPX_TASKGRAPH
   bool is_taskgraph = 0; // whether the task is within a TDG
+  bool td_memory_task_has_runtime_depnode = false;
   kmp_tdg_info_t *tdg; // used to associate task with a TDG
   kmp_int32 td_tdg_task_id; // local task id in its TDG
+  kmp_target_task_data_t *td_target_info; // Pointer to target nowait data info
 #endif
-  kmp_target_data_t td_target_data;
+  kmp_target_data td_target_data;
 }; // struct kmp_taskdata
 
 // Make sure padding above worked
@@ -3131,6 +3178,12 @@ typedef struct KMP_ALIGN_CACHE kmp_base_info {
   std::atomic<bool> th_blocking;
 #endif
   kmp_cg_root_t *th_cg_roots; // list of cg_roots associated with this thread
+#ifdef OMPX_TASKGRAPH 
+  // Indicates whether this thread is executing tasks
+  std::atomic<int32_t> th_tasking_level;
+#endif
+
+
 } kmp_base_info_t;
 
 typedef union KMP_ALIGN_CACHE kmp_info {
@@ -3368,6 +3421,7 @@ extern int kmp_c_debug;
 extern int kmp_d_debug;
 extern int kmp_e_debug;
 extern int kmp_f_debug;
+extern int kmp_g_debug;
 #endif /* KMP_DEBUG */
 
 /* For debug information logging using rotating buffer */
@@ -3730,7 +3784,11 @@ extern std::atomic<kmp_int32> __kmp_task_counter;
 #define _KMP_GEN_ID(counter) (~0)
 #endif /* USE_DEBUGGER */
 
-#define KMP_GEN_TASK_ID() _KMP_GEN_ID(__kmp_task_counter)
+#if OMPX_TASKGRAPH
+#define KMP_GEN_TASK_ID() KMP_ATOMIC_INC(&__kmp_task_counter)
+#else
+ #define KMP_GEN_TASK_ID() _KMP_GEN_ID(__kmp_task_counter)
+#endif
 #define KMP_GEN_TEAM_ID() _KMP_GEN_ID(__kmp_team_counter)
 
 /* ------------------------------------------------------------------------ */
@@ -4454,6 +4512,10 @@ KMP_EXPORT kmp_int32 __kmpc_start_record_task(ident_t *loc, kmp_int32 gtid,
                                               kmp_int32 tdg_id);
 KMP_EXPORT void __kmpc_end_record_task(ident_t *loc, kmp_int32 gtid,
                                        kmp_int32 input_flags, kmp_int32 tdg_id);
+
+KMP_EXPORT void __kmpc_test_record(kmp_int32 gtid, kmp_taskgraph_flags_t *flags,
+                                   kmp_int32 tdg_id);
+
 #endif
 /* Interface to fast scalable reduce methods routines */
 
@@ -4625,6 +4687,207 @@ static inline void __kmp_resume_if_hard_paused() {
 }
 
 extern void __kmp_omp_display_env(int verbose);
+
+/* ------------------------------------------------------------------------ */
+
+#ifdef OMPX_TASKGRAPH
+
+// The target nowait regions are encapsulated inside OpenMP tasks, which makes
+// any libomptarget device oblivious of any task structure. To pass the OpenMP
+// Task Graph to the libomptarget, following data must be added to the Graph
+struct kmp_target_task_data {
+  //void *async_handle; // libomptarget async handle for task completion query
+  kmp_int64 device_id = -1;           // Device ID
+  void *outlined_fn_id = nullptr;     // Target region/outlined function address
+  kmp_int32 num_args = 0;             // Target region arguments info
+  void **args_base = nullptr;
+  void **args = nullptr;
+  kmp_int64 *arg_sizes = nullptr;
+  kmp_int64 *arg_types = nullptr;
+
+  kmp_target_task_data() = default;
+  kmp_target_task_data(kmp_int64 device_id_p, void *outlined_fn_id_p,
+                       kmp_int32 num_args_p, void **args_base_p, void **args_p,
+                       kmp_int64 *arg_sizes_p, kmp_int64 *arg_types_p);
+  ~kmp_target_task_data();
+
+  void *operator new(size_t size);
+  void operator delete(void *ptr);
+
+  kmp_target_task_data &operator=(const kmp_target_task_data &other);
+
+public:
+  void allocBuffers();
+  void deleteBuffers();
+  void copyBuffers(void **args_base_p, void **args_p, kmp_int64 *arg_sizes_p,
+                   kmp_int64 *arg_types_p);
+};
+
+// Task structure used by libomptarget
+typedef struct kmp_target_task_list_node kmp_target_task_list_node_t;
+typedef struct kmp_target_task kmp_target_task_t;
+typedef struct kmp_target_task_map kmp_target_task_map_t;
+
+
+struct kmp_target_task_list_node {
+  kmp_target_task_t *task;
+  kmp_target_task_list_node_t *next;
+};
+
+struct kmp_target_dep {
+  kmp_intptr_t addr;
+  struct {
+    bool in : 1;
+    bool out : 1;
+    bool mtx : 1;
+  } dep_type;
+};
+
+struct kmp_target_task {
+  kmp_int32 task_id; // Task id from taskdata structure
+  bool is_target_task; // Set if task represents a target region
+  kmp_task_t *task = nullptr; // Underlying OpenMP task
+  kmp_target_task_data_t target_data; // Target data from taskdata structure
+
+  kmp_int32 num_deps; // Number of dependencies passed to this task
+  kmp_target_dep_t *deps; // Dependencies array
+
+  kmp_target_task_list_node_t *successors; // Successors in the task graph
+  kmp_target_task_list_node_t *predecessors; // Predecessors in the task graph
+  kmp_int32 num_predecessors; // Number of direct predecessors
+};
+
+struct kmp_target_task_map {
+  kmp_target_task_t *tasks; // Current tasks array
+  kmp_int32 num_tasks; // Number of current tasks
+
+  kmp_target_task_t **roots; // Pointer to root tasks in the tasks array
+  kmp_int32 num_roots; // Number of root tasks
+};
+
+kmp_target_task_map_t *__kmpc_target_task_map_create();
+
+void __kmpc_target_task_map_free(kmp_target_task_map_t *task_map);
+
+kmp_target_task_t *__kmpc_target_task_map_get(
+    kmp_target_task_map_t *task_map, kmp_int32 task_id);
+
+void __kmpc_add_target_task_with_deps(
+    const kmp_taskdata_t *taskdata, kmp_int32 ndeps,
+    const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
+    const kmp_depend_info_t *dep_list_noalias);
+
+void __kmpc_remove_root_target_task(kmp_int32 task_id);
+
+
+// Functions used by the OpenMP Runtime to manage target tasks.
+// =============================================================================
+
+// Gets the task id of the current (EXPLICIT/User created) task being executed
+// by the calling OpenMP thread.
+//
+// Returns: the task id of the executing task. If the caller thread is not a
+//          valid OpenMP thread or if it is not executing an explicit task, the
+//          function will return -1.
+kmp_int32 __kmpc_target_task_current_task_id();
+
+bool __kmpc_is_graph_builder_tasking();
+bool __kmpc_has_active_tasks();
+
+// Helpers
+struct LifetimeInc {
+  std::atomic<int32_t> &counter;
+
+  LifetimeInc(std::atomic<int32_t> &counter) : counter(counter) {
+    counter.fetch_add(1);
+  }
+
+  ~LifetimeInc() { counter.fetch_sub(1); }
+};
+
+//API used for the OmpCluster Static Scheduler
+enum class TaskState;
+static inline void WarnUnknownScheduler(const std::string &str);
+void __kmpc_InitScheduler();
+KMP_EXPORT void __kmpc_DeinitScheduler();
+
+//Set of functions to communicate with the libomptarget library
+KMP_EXPORT int32_t __kmpc_scheduleTask(int32_t task_id);
+KMP_EXPORT void __kmpc_pinTask(int32_t task_id, int DeviceId);
+KMP_EXPORT void __kmpc_setTaskState(int32_t task_id, TaskState new_state);
+KMP_EXPORT void __kmpc_setTaskStateWithDevice(int32_t task_id, int device_id,
+                                              TaskState new_state);
+KMP_EXPORT kmp_target_dep __kmpc_getDep(int32_t task_id, int64_t addr);
+KMP_EXPORT void __kmpc_dumpTaskGraph();
+KMP_EXPORT const void *__kmpc_GetCurrentOutlinedFnID();
+KMP_EXPORT void __kmpc_dmdas_target_dispatched(int32_t task_id);
+KMP_EXPORT int32_t
+__kmpc_dmdas_get_task_device(int32_t task_id);
+KMP_EXPORT void __kmpc_dmdas_record_kernel_time(
+    int32_t task_id,
+    double kernel_time);
+
+int __kmpc_get_num_devices();
+int omp_get_num_devices(void) __attribute__((weak));
+
+int omp_get_initial_device(void) __attribute__((weak));
+
+//Main scheduling function: Retrieve and schedule the taskgraph if needed
+void __kmpc_scheduleGraph(kmp_tdg_info_t* tdg);
+bool __kmpc_is_legacy_scheduler();
+bool __kmpc_legacy_is_target_data_task(int32_t task_id);
+void __kmpc_scheduleLegacyGraph();
+void __kmpc_acquireGraphOnly(kmp_tdg_info_t *tdg);
+void __kmpc_reset_schedule_map(kmp_tdg_info_t* tdg);  
+void __kmpc_waitScheduleGraph();
+kmp_int32 __kmpc_get_task_device(kmp_int32 task_id);
+
+bool __kmpc_is_rescheduling();
+void __kmpc_reset_scheduler_barrier();
+void __kmpc_reset_legacy_scheduler_owner();
+void __kmpc_scheduler_update_weights();
+void __kmpc_allow_exec();
+kmp_int32 __kmpc_scheduling_iteration_counter();
+kmp_int32 __kmpc_inc_scheduling_iteration_counter();
+
+kmp_int32 __kmpc_get_device_type(kmp_int64 device_id);
+int __tgt_target_get_device_type(int64_t DeviceId) __attribute__((weak));
+
+// Maps a task ID to its associated schedule data
+using ScheduleMap = std::unordered_map<kmp_int32, TaskScheduleData>;
+
+ScheduleMap* get_schedule_map(kmp_int32 tdg_id);
+
+//Helpers
+void __kmpc_print_profiled_comp_cost(kmp_tdg_info_t* tdg);
+
+kmp_tdg_info_t *__kmpc_find_tdg(kmp_int32 tdg_id);
+kmp_int32 __kmpc_curr_tdg_idx();
+
+void __kmpc_free_schedule_maps();
+
+void  __kmpc_remove_task(kmp_node_info_t*); //Remove tasks and the related dependencies
+
+kmp_task_t *__kmp_alloc_memory_task(
+    kmp_int32 gtid,
+    int source_device,
+    int target_device,
+    void *dep_addr,
+    size_t size_addr,
+    kmp_task_t *source,
+    kmp_task_t *target);
+
+kmp_task_t *__kmp_insert_legacy_memory_task(
+    kmp_int32 gtid,
+    kmp_task_t *source,
+    kmp_task_t *target,
+    int source_device,
+    int target_device,
+    void *dep_addr,
+    size_t size_addr);
+
+kmp_task_t* __kmp_create_memory_task(kmp_int32 gtid, kmp_task_t* source, kmp_task_t* target, int source_device, int target_device,  void* dep_addr, size_t size_addr, bool is_taskgraph);
+#endif
 
 // 1: it is initializing hidden helper team
 extern volatile int __kmp_init_hidden_helper;
@@ -4939,5 +5202,10 @@ template <typename T1, typename T2>
 static inline void __kmp_type_convert(T1 src, T2 *dest) {
   *dest = kmp_convert<T1, T2>::to(src);
 }
+
+extern void __kmp_execute_task_direct(
+    kmp_int32 gtid,
+    kmp_task_t *task,
+    kmp_taskdata_t *current_task);
 
 #endif /* KMP_H */

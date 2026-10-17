@@ -4097,6 +4097,9 @@ static int __kmp_free_hot_teams(kmp_root_t *root, kmp_info_t *thr, int level,
 // Resets a root thread and clear its root and hot teams.
 // Returns the number of __kmp_threads entries directly and indirectly freed.
 static int __kmp_reset_root(int gtid, kmp_root_t *root) {
+
+  __kmpc_free_schedule_maps();
+
   kmp_team_t *root_team = root->r.r_root_team;
   kmp_team_t *hot_team = root->r.r_hot_team;
   int n = hot_team->t.t_nproc;
