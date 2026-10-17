@@ -30,9 +30,15 @@ jobs:
       - name: Fetch SonarQube target branch
         if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags --depth=100 origin \
-            ompc-2:refs/remotes/origin/ompc-2
+          set -euo pipefail
 
+          git fetch --no-tags --depth=20 origin \
+            "+refs/heads/${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}" \
+            "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+          git merge-base \
+            "origin/${{ github.head_ref }}" \
+            "origin/${{ github.base_ref }}"
           git merge-base HEAD origin/ompc-2
 
       - name: Bootstrap Clang
