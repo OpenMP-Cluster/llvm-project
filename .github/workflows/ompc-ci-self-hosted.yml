@@ -25,11 +25,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Fetch SonarQube target branch
         if: github.event_name == 'pull_request'
-        run: git fetch origin ompc-2:refs/remotes/origin/ompc-2
+        run: |
+          git fetch --no-tags --depth=100 origin \
+            ompc-2:refs/remotes/origin/ompc-2
+
+          git merge-base HEAD origin/ompc-2
 
       - name: Bootstrap Clang
         run: /home/ompc/tools/llvm/bootstrap-clang.sh "$GITHUB_WORKSPACE"
