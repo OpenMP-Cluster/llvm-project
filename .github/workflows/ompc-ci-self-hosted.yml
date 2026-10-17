@@ -7,6 +7,7 @@ on:
       - "openmp/**"
       - "offload/**"
       - ".github/workflows/ompc-ci-self-hosted.yml"
+      - "sonar-project.properties"
 
 permissions:
   contents: read
@@ -185,7 +186,18 @@ jobs:
             -output-dir="$COVERAGE_DIR/html" \
             -ignore-filename-regex='(/usr/|/third-party/)'
 
+          "$LLVM_BIN/llvm-cov" export "$LIBOMP" \
+            -instr-profile="$COVERAGE_DIR/coverage.profdata" \
+            -format=lcov \
+            -ignore-filename-regex='(/usr/|/third-party/)' \
+            > "$COVERAGE_DIR/coverage.info"
+
           cat "$COVERAGE_DIR/summary.txt"
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Upload LLVM coverage report
         if: always()
