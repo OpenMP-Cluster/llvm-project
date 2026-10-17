@@ -32,14 +32,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch --no-tags --depth=20 origin \
+          git fetch --no-tags --depth=110 origin \
             "+refs/heads/${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}" \
             "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
 
           git merge-base \
             "origin/${{ github.head_ref }}" \
             "origin/${{ github.base_ref }}"
-          git merge-base HEAD origin/ompc-2
 
       - name: Bootstrap Clang
         run: /home/ompc/tools/llvm/bootstrap-clang.sh "$GITHUB_WORKSPACE"
