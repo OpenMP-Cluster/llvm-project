@@ -20,6 +20,7 @@
 #include "kmp_stats.h"
 #include "kmp_utils.h"
 #include "ompt-specific.h"
+#include "kmp_dmdas.h"
 
 #define MAX_MESSAGE 512
 
@@ -916,6 +917,10 @@ Mark the end of a <tt>master</tt> region. This should only be called by the
 thread that executes the <tt>master</tt> region.
 */
 void __kmpc_end_master(ident_t *loc, kmp_int32 global_tid) {
+
+if (__kmp_use_dmdas_runtime()) {
+    __kmp_dmdas_run_ready_tasks();
+}
   KC_TRACE(10, ("__kmpc_end_master: called T#%d\n", global_tid));
   __kmp_assert_valid_gtid(global_tid);
   KMP_DEBUG_ASSERT(KMP_MASTER_GTID(global_tid));
@@ -1976,6 +1981,12 @@ by the `single` construct.
 void __kmpc_end_single(ident_t *loc, kmp_int32 global_tid) {
   __kmp_assert_valid_gtid(global_tid);
   __kmp_exit_single(global_tid);
+
+  if (__kmp_use_dmdas_runtime()) {
+
+      __kmp_dmdas_run_ready_tasks();
+
+  }
   KMP_POP_PARTITIONED_TIMER();
 
 #if OMPT_SUPPORT && OMPT_OPTIONAL

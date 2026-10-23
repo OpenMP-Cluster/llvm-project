@@ -350,6 +350,7 @@ CUresult cuCtxSetLimit(CUlimit, size_t);
 
 CUresult cuEventCreate(CUevent *, unsigned int);
 CUresult cuEventRecord(CUevent, CUstream);
+CUresult cuEventElapsedTime(float *, CUevent, CUevent);
 CUresult cuStreamWaitEvent(CUstream, CUevent, unsigned int);
 CUresult cuEventSynchronize(CUevent);
 CUresult cuEventDestroy(CUevent);

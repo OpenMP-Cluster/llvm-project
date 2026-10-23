@@ -16,6 +16,7 @@ add_llvm_library(omptarget
   LegacyAPI.cpp
   PluginManager.cpp
   DeviceImage.cpp
+  scheduler.cpp
 
   OpenMP/API.cpp
   OpenMP/Mapping.cpp
@@ -41,7 +42,8 @@ add_llvm_library(omptarget
   BUILDTREE_ONLY
 )
 target_include_directories(omptarget PRIVATE
-  ${LIBOMPTARGET_INCLUDE_DIR} ${LIBOMPTARGET_BINARY_INCLUDE_DIR}
+	#	${LIBOMPTARGET_INCLUDE_DIR}/Shared 
+	${LIBOMPTARGET_INCLUDE_DIR} ${LIBOMPTARGET_BINARY_INCLUDE_DIR}
 )
 
 if(LLVM_HAVE_LINK_VERSION_SCRIPT)

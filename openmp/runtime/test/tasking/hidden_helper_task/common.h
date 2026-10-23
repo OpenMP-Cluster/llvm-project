@@ -54,7 +54,11 @@ kmp_task_t *__kmpc_omp_task_alloc(ident_t *, kmp_int32, kmp_int32, size_t,
                                   size_t, kmp_routine_entry_t);
 kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *, kmp_int32, kmp_int32,
                                          size_t, size_t, kmp_routine_entry_t,
-                                         kmp_int64);
+                                         kmp_int64, void * = nullptr,
+                                         kmp_int32 = 0, void ** = nullptr,
+                                         void ** = nullptr,
+                                         kmp_int64 * = nullptr,
+                                         kmp_int64 * = nullptr);
 kmp_int32 __kmpc_omp_taskwait(ident_t *, kmp_int32);
 kmp_int32 __kmpc_omp_task(ident_t *, kmp_int32, kmp_task_t *);
 kmp_int32 __kmpc_omp_task_with_deps(ident_t *loc_ref, kmp_int32 gtid,

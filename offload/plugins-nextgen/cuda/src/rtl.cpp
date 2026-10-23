@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <deque>
 #include <cassert>
 #include <cstddef>
 #include <cuda.h>
@@ -509,6 +510,9 @@ struct CUDADeviceTy : public GenericDeviceTy {
     return HardwareParallelism;
   }
 
+  /// NVIDIA GPU returns its device type as CUDA_DEVICE
+  DeviceType getDeviceType() const override { return DeviceType::CUDA_DEVICE; }
+
   /// We want to set up the RPC server for host services to the GPU if it is
   /// available.
   bool shouldSetupRPCServer() const override { return true; }
@@ -530,6 +534,87 @@ struct CUDADeviceTy : public GenericDeviceTy {
       // Modify the async info's stream.
       AsyncInfoWrapper.setQueueAs<CUstream>(Stream);
     }
+    return Plugin::success();
+  }
+
+  // DMDAS profiling: GPU kernel timing with CUDA events.
+  struct KernelTimingTy {
+    CUevent Start = nullptr;
+    CUevent Stop = nullptr;
+  };
+
+  Error startKernelTiming(CUstream Stream) {
+    KernelTimingTy Timing;
+
+    if (auto Err = CUDAEventManager.getResource(Timing.Start))
+      return Err;
+
+    if (auto Err = CUDAEventManager.getResource(Timing.Stop)) {
+      CUDAEventManager.returnResource(Timing.Start);
+      return Err;
+    }
+
+    CUresult Res = cuEventRecord(Timing.Start, Stream);
+    if (auto Err = Plugin::check(Res, "error recording kernel start event: %s")) {
+      CUDAEventManager.returnResource(Timing.Start);
+      CUDAEventManager.returnResource(Timing.Stop);
+      return Err;
+    }
+
+    KernelTimings[Stream].push_back(Timing);
+    return Plugin::success();
+  }
+
+  Error stopKernelTiming(CUstream Stream) {
+    auto It = KernelTimings.find(Stream);
+    if (It == KernelTimings.end() || It->second.empty())
+      return Plugin::success();
+
+    CUresult Res =
+        cuEventRecord(It->second.back().Stop, Stream);
+
+    return Plugin::check(
+        Res, "error recording kernel stop event: %s");
+  }
+
+  Error collectKernelTiming(CUstream Stream, __tgt_async_info &AsyncInfo) {
+    auto It = KernelTimings.find(Stream);
+    if (It == KernelTimings.end())
+      return Plugin::success();
+
+    double TotalSeconds = 0.0;
+
+    for (KernelTimingTy &Timing : It->second) {
+      float Milliseconds = 0.0f;
+
+      CUresult Res =
+          cuEventElapsedTime(
+              &Milliseconds,
+              Timing.Start,
+              Timing.Stop);
+
+      if (auto Err = Plugin::check(
+              Res,
+              "error measuring kernel execution time: %s"))
+        return Err;
+
+      TotalSeconds +=
+          static_cast<double>(Milliseconds) / 1000.0;
+
+      if (auto Err =
+              CUDAEventManager.returnResource(Timing.Start))
+        return Err;
+
+      if (auto Err =
+              CUDAEventManager.returnResource(Timing.Stop))
+        return Err;
+    }
+
+    KernelTimings.erase(It);
+
+    if (TotalSeconds > 0.0)
+      AsyncInfo.KernelExecutionTime = TotalSeconds;
+
     return Plugin::success();
   }
 
@@ -644,6 +729,10 @@ struct CUDADeviceTy : public GenericDeviceTy {
     CUstream Stream = reinterpret_cast<CUstream>(AsyncInfo.Queue);
     CUresult Res;
     Res = cuStreamSynchronize(Stream);
+
+    if (Res == CUDA_SUCCESS)
+      if (auto Err = collectKernelTiming(Stream, AsyncInfo))
+        return Err;
 
     // Once the stream is synchronized, return it to stream pool and reset
     // AsyncInfo. This is to make sure the synchronization only works for its
@@ -785,6 +874,10 @@ struct CUDADeviceTy : public GenericDeviceTy {
     // Not ready streams must be considered as successful operations.
     if (Res == CUDA_ERROR_NOT_READY)
       return Plugin::success();
+
+    if (Res == CUDA_SUCCESS)
+      if (auto Err = collectKernelTiming(Stream, AsyncInfo))
+        return Err;
 
     // Once the stream is synchronized and the operations completed (or an error
     // occurs), return it to stream pool and reset AsyncInfo. This is to make
@@ -1274,6 +1367,9 @@ private:
   /// The maximum number of warps that can be resident on all the SMs
   /// simultaneously.
   uint32_t HardwareParallelism = 0;
+
+  // DMDAS profiling: one pending GPU kernel timing per CUDA stream.
+  std::unordered_map<CUstream, std::deque<KernelTimingTy>> KernelTimings;
 };
 
 Error CUDAKernelTy::launchImpl(GenericDeviceTy &GenericDevice,
@@ -1300,9 +1396,17 @@ Error CUDAKernelTy::launchImpl(GenericDeviceTy &GenericDevice,
   if (GenericDevice.getRPCServer())
     GenericDevice.Plugin.getRPCServer().Thread->notify();
 
+  // DMDAS profiling: record GPU execution interval on the kernel stream.
+  if (auto Err = CUDADevice.startKernelTiming(Stream))
+    return Err;
+
   CUresult Res = cuLaunchKernel(Func, NumBlocks[0], NumBlocks[1], NumBlocks[2],
                                 NumThreads[0], NumThreads[1], NumThreads[2],
                                 MaxDynCGroupMem, Stream, nullptr, Config);
+
+  if (Res == CUDA_SUCCESS)
+    if (auto Err = CUDADevice.stopKernelTiming(Stream))
+      return Err;
 
   // Register a callback to indicate when the kernel is complete.
   if (GenericDevice.getRPCServer())
@@ -1423,7 +1527,11 @@ struct CUDAPluginTy final : public GenericPluginTy {
       return ElfOrErr.takeError();
 
     // Get the numeric value for the image's `sm_` value.
-    auto SM = ElfOrErr->getPlatformFlags() & ELF::EF_CUDA_SM;
+    const auto Header = ElfOrErr->getELFFile().getHeader();
+    unsigned SM =
+        Header.e_ident[ELF::EI_ABIVERSION] == ELF::ELFABIVERSION_CUDA_V1
+            ? Header.e_flags & ELF::EF_CUDA_SM
+            : (Header.e_flags & ELF::EF_CUDA_SM_MASK) >> 8;
 
     CUdevice Device;
     CUresult Res = cuDeviceGet(&Device, DeviceId);

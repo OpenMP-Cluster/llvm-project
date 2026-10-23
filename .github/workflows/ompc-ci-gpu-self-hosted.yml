@@ -1,0 +1,143 @@
+name: OMPC GPU CI (self-hosted)
+
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+concurrency:
+  group: ompc-gpu-build
+  cancel-in-progress: false
+
+jobs:
+  ompc-gpu-self-hosted:
+    name: Build and test OMPC GPU
+    runs-on: [self-hosted, ompc-ci]
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout LLVM
+        uses: actions/checkout@v4
+
+      - name: Build OMPC GPU
+        run: |
+          set -euo pipefail
+          JOBS=2 /home/ompc/tools/llvm/build-ompc-gpu.sh "$GITHUB_WORKSPACE"
+
+      - name: Checkout TaskBench
+        uses: actions/checkout@v4
+        with:
+          repository: OpenMP-Cluster/task-bench
+          ref: ci-scheduling-tests
+          path: task-bench
+
+      - name: Build TaskBench GPU
+        run: |
+          set -euo pipefail
+
+          TC=/home/ompc/tools/llvm/installs/gpu/release
+          export PATH="$TC/bin:/usr/local/cuda/bin:$PATH"
+          export LD_LIBRARY_PATH="$TC/lib:$TC/lib/x86_64-unknown-linux-gnu:${LD_LIBRARY_PATH:-}"
+          export LIBRARY_PATH="$TC/lib:$TC/lib/x86_64-unknown-linux-gnu:${LIBRARY_PATH:-}"
+
+          export OMPC_LLVM_INSTALL="$TC"
+          export OMPC_RUNTIMES_BUILD=/home/ompc/tools/llvm/builds/gpu/runtimes
+          export CUDA_HOME=/usr/local/cuda
+
+          make -C task-bench/core -j2 CC=clang CXX=clang++
+
+          make -C task-bench/ompcluster -j2 \
+            main_gpu_auto \
+            CXX=clang++ \
+            CUDA=1 \
+            CUDA_ARCH=sm_120
+
+          "$TC/bin/llvm-objdump" --offloading \
+            task-bench/ompcluster/main_gpu_auto \
+            | tee gpu-offloading-images.txt
+
+          grep -q 'arch *sm_120' gpu-offloading-images.txt
+
+      - name: Run GPU scheduling tests
+        run: |
+          set -euo pipefail
+
+          TC=/home/ompc/tools/llvm/installs/gpu/release
+          export PATH="$TC/bin:$PATH"
+          export LD_LIBRARY_PATH="$TC/lib:$TC/lib/x86_64-unknown-linux-gnu:${LD_LIBRARY_PATH:-}"
+
+          export OMP_NUM_THREADS=4
+          export LIBOMP_NUM_HIDDEN_HELPER_THREADS=4
+          export OMPCLUSTER_NUM_EXEC_EVENT_HANDLERS=2
+          export OMPCLUSTER_TASKBENCH_ITERATION_NUMBER=1
+          export OMP_TARGET_OFFLOAD=MANDATORY
+          export UCX_TLS=self,sysv,tcp
+          export LIBOMPTARGET_DEBUG=1
+
+          cd task-bench
+
+          run_gpu_test() {
+            local name="$1"
+            local scheduler="$2"
+            local tdg="$3"
+            local log="${name}.log"
+            local rc=0
+
+            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_INITIAL_SCHEDULE_POLICY
+            unset OMPCLUSTER_INITIAL_ITERATION_NUMBER
+
+            if [[ "$scheduler" == "dmdas" ]]; then
+              export OMPCLUSTER_RUNTIME=dmdas
+            else
+              export OMPCLUSTER_SCHEDULER="$scheduler"
+            fi
+
+            export KMP_MAX_TDGS="$tdg"
+
+            if [[ "$scheduler" == "heft" ]]; then
+              export OMPCLUSTER_INITIAL_SCHEDULE_POLICY=0
+              export OMPCLUSTER_INITIAL_ITERATION_NUMBER=0
+            fi
+
+            echo "=== GPU TEST: $name ==="
+
+            timeout 60s mpirun -l \
+              -np 2 "$TC/bin/llvm-offload-mpi-proxy-device" \
+              : -np 1 ./ompcluster/main_gpu_auto \
+              -steps 4 -width 4 -type trivial \
+              -kernel compute_bound -iter 100 \
+              -output 32768 -tpblock 32 -nblocks 1 \
+              > "$log" 2>&1 || rc=$?
+
+            grep -E \
+              'Total Tasks|Elapsed Time|Launching kernel|Assertion|Segmentation' \
+              "$log" | tail -20 || true
+
+            if [[ "$rc" -ne 0 ]] ||
+               ! grep -q 'Total Tasks 16' "$log" ||
+               ! grep -q 'Elapsed Time' "$log" ||
+               ! grep -q 'Launching kernel' "$log"; then
+              echo "::error::GPU test $name failed (exit=$rc)"
+              tail -80 "$log"
+              return 1
+            fi
+
+            echo "PASS: $name"
+          }
+
+          run_gpu_test dmdas-tdg dmdas 100
+          run_gpu_test dmdas-no-tdg dmdas 0
+          run_gpu_test heft-legacy-tdg heft_legacy 100
+          run_gpu_test heft-legacy-no-tdg heft_legacy 0
+          run_gpu_test heft-tdg heft 100
+
+      - name: Upload GPU logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ompc-gpu-test-logs
+          path: |
+            task-bench/*.log
+            gpu-offloading-images.txt
+          if-no-files-found: warn
