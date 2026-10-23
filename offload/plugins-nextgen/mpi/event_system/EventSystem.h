@@ -77,6 +77,7 @@ enum class EventTypeTy : unsigned int {
   DATA_UNLOCK,
   DATA_NOTIFY_MAPPED,
   DATA_NOTIFY_UNMAPPED,
+  GET_DEVICE_TYPE,
 
   // Memory management.
   ALLOC,  // Allocates a buffer at the remote process.
@@ -256,6 +257,7 @@ public:
   /// Target peer to send and receive messages
   int OtherRank;
 
+
   /// Target device in OtherRank
   int DeviceId;
 
@@ -358,6 +360,7 @@ EventTy getGlobal(MPIRequestManagerTy RequestManager,
 EventTy getFunction(MPIRequestManagerTy RequestManager,
                     __tgt_device_binary Binary, const char *Name,
                     void **KernelPtr);
+EventTy getDeviceType(MPIRequestManagerTy RequestManager, DeviceType *QueryResult);
 EventTy launchKernel(MPIRequestManagerTy RequestManager, void *TgtEntryPtr,
                      EventDataHandleTy TgtArgs, EventDataHandleTy TgtOffsets,
                      EventDataHandleTy KernelArgsHandle,
@@ -490,6 +493,9 @@ private:
   bool destroyLocalMPIContext();
 
 public:
+
+
+  int getLocalRank() const { return LocalRank; }
   EventSystemTy();
   ~EventSystemTy();
 

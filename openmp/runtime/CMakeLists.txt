@@ -309,6 +309,14 @@ set(LIBOMP_USE_DEBUGGER FALSE CACHE BOOL
 set(LIBOMP_USE_STDCPPLIB FALSE CACHE BOOL
   "Should we link to C++ library?")
 
+# Enable OpenMP tasking integration with libomptarget (needed by mpi device).
+set(LIBOMP_OMPX_TASKGRAPH TRUE CACHE BOOL
+    "Enable libomptarget integration with OpenMP tasking?")
+# Libomptarget integration requires the std C++ library
+if(LIBOMP_OMPX_TASKGRAPH)
+  set(LIBOMP_USE_STDCPPLIB TRUE)
+endif()
+
 # Intel(R) Transactional Synchronization Extensions (Intel(R) TSX) based locks have
 # __asm code which can be troublesome for some compilers.  This feature is also x86 specific.
 # TODO: Make this a real feature check

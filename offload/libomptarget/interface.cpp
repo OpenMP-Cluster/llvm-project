@@ -19,6 +19,7 @@
 #include "PluginManager.h"
 #include "omptarget.h"
 #include "private.h"
+#include "scheduler.h"
 
 #include "Shared/EnvironmentVar.h"
 #include "Shared/Profile.h"
@@ -186,10 +187,12 @@ EXTERN void __tgt_target_data_begin_mapper(ident_t *Loc, int64_t DeviceId,
                                            map_var_info_t *ArgNames,
                                            void **ArgMappers) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
+  DeviceId = Schedule(Loc, DeviceId);
   targetData<AsyncInfoTy>(Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
                           ArgTypes, ArgNames, ArgMappers, targetDataBegin,
                           "Entering OpenMP data region with being_mapper",
                           "begin");
+  MarkExecutedTask();
 }
 
 EXTERN void __tgt_target_data_begin_nowait_mapper(
@@ -198,6 +201,9 @@ EXTERN void __tgt_target_data_begin_nowait_mapper(
     void **ArgMappers, int32_t DepNum, void *DepList, int32_t NoAliasDepNum,
     void *NoAliasDepList) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
+  DeviceId = Schedule(Loc, DeviceId);
+  if (__kmpc_record_target_data_device)
+    __kmpc_record_target_data_device(static_cast<int32_t>(DeviceId));
   targetData<TaskAsyncInfoWrapperTy>(
       Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes, ArgTypes, ArgNames,
       ArgMappers, targetDataBegin,
@@ -214,6 +220,7 @@ EXTERN void __tgt_target_data_end_mapper(ident_t *Loc, int64_t DeviceId,
                                          map_var_info_t *ArgNames,
                                          void **ArgMappers) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
+  DeviceId = Schedule(Loc, DeviceId);
   targetData<AsyncInfoTy>(Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes,
                           ArgTypes, ArgNames, ArgMappers, targetDataEnd,
                           "Exiting OpenMP data region with end_mapper", "end");
@@ -225,6 +232,7 @@ EXTERN void __tgt_target_data_end_nowait_mapper(
     void **ArgMappers, int32_t DepNum, void *DepList, int32_t NoAliasDepNum,
     void *NoAliasDepList) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
+  DeviceId = Schedule(Loc, DeviceId);
   targetData<TaskAsyncInfoWrapperTy>(
       Loc, DeviceId, ArgNum, ArgsBase, Args, ArgSizes, ArgTypes, ArgNames,
       ArgMappers, targetDataEnd,
@@ -393,11 +401,17 @@ EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                int32_t ThreadLimit, void *HostPtr,
                                KernelArgsTy *KernelArgs) {
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
-  if (KernelArgs->Flags.NoWait)
-    return targetKernel<TaskAsyncInfoWrapperTy>(
+  DeviceId = Schedule(Loc, DeviceId);
+  if (KernelArgs->Flags.NoWait) {
+    int Rc = targetKernel<TaskAsyncInfoWrapperTy>(
         Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
-  return targetKernel<AsyncInfoTy>(Loc, DeviceId, NumTeams, ThreadLimit,
+    MarkExecutedTask();
+  return Rc;
+  }
+  int Rc = targetKernel<AsyncInfoTy>(Loc, DeviceId, NumTeams, ThreadLimit,
                                    HostPtr, KernelArgs);
+  MarkExecutedTask();
+  return Rc;
 }
 
 /// Activates the record replay mechanism.
@@ -548,6 +562,18 @@ EXTERN void __tgt_target_nowait_query(void **AsyncHandle) {
     return;
   }
 
+  double KernelTime = AsyncInfo->getKernelExecutionTime();
+
+  if (KernelTime > 0.0) {
+    int32_t TaskId = -1;
+
+    if (__kmpc_target_task_current_task_id)
+      TaskId = __kmpc_target_task_current_task_id();
+
+    if (TaskId != -1 && __kmpc_dmdas_record_kernel_time)
+      __kmpc_dmdas_record_kernel_time(TaskId, KernelTime);
+  }
+
   // When a thread successfully completes a target nowait region, we
   // exponentially backoff its query counter by the query factor.
   QueryCounter.decrement();
@@ -572,38 +598,55 @@ EXTERN void __tgt_target_memtask(void *HstPtr, int64_t Size, int64_t DstDevice,
   AsyncInfoTy SrcAsyncInfo(*SrcDeviceOrErr);
   AsyncInfoTy DstAsyncInfo(*DstDeviceOrErr);
 
-  MappingInfoTy::HDTTMapAccessorTy SrcHDTTMap =
-      SrcDeviceOrErr->getMappingInfo().HostDataToTargetMap.getExclusiveAccessor();
-
-  TargetPointerResultTy SrcTPR = SrcDeviceOrErr->getMappingInfo().getTargetPointer(
-      SrcHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
-      /*HstPtrName=*/nullptr,
-      /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
-      /*UpdateRef=*/true, /*HasCloseModifier=*/false,
-      /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
-      /*AsyncInfo=*/ SrcAsyncInfo,
-      /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
-
-  MappingInfoTy::HDTTMapAccessorTy DstHDTTMap =
-      DstDeviceOrErr->getMappingInfo().HostDataToTargetMap.getExclusiveAccessor();
-
-  TargetPointerResultTy DstTPR = DstDeviceOrErr->getMappingInfo().getTargetPointer(
-      DstHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
-      /*HstPtrName=*/nullptr,
-      /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
-      /*UpdateRef=*/true, /*HasCloseModifier=*/false,
-      /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
-      /*AsyncInfo=*/ DstAsyncInfo,
-      /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
-
-  SrcPtr = SrcTPR.TargetPointer;
-  DstPtr = DstTPR.TargetPointer;
+  {
+    MappingInfoTy::HDTTMapAccessorTy SrcHDTTMap =
+        SrcDeviceOrErr->getMappingInfo().HostDataToTargetMap.getExclusiveAccessor();
   
-  printf("SrcPtr=%p, DstPtr=%p\n", SrcPtr, DstPtr);
+    TargetPointerResultTy SrcTPR = SrcDeviceOrErr->getMappingInfo().getTargetPointer(
+        SrcHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
+        /*HstPtrName=*/nullptr,
+        /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
+        /*UpdateRef=*/false, /*HasCloseModifier=*/false,
+        /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
+        /*AsyncInfo=*/ SrcAsyncInfo,
+        /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
 
-  omp_target_memcpy(DstPtr, SrcPtr, Size, 0, 0,
-    static_cast<int32_t>(DstDevice), static_cast<int32_t>(SrcDevice));
+    SrcPtr = SrcTPR.TargetPointer;
+  }
+
+  {
+    MappingInfoTy::HDTTMapAccessorTy DstHDTTMap =
+        DstDeviceOrErr->getMappingInfo().HostDataToTargetMap.getExclusiveAccessor();
+
+    TargetPointerResultTy DstTPR = DstDeviceOrErr->getMappingInfo().getTargetPointer(
+        DstHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
+        /*HstPtrName=*/nullptr,
+        /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
+        /*UpdateRef=*/false, /*HasCloseModifier=*/false,
+        /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
+        /*AsyncInfo=*/ DstAsyncInfo,
+        /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
+
+    DstPtr = DstTPR.TargetPointer;
+  }
+
+
+
+  omp_target_memcpy(
+      DstPtr, SrcPtr, Size, 0, 0,
+      static_cast<int32_t>(DstDevice),
+      static_cast<int32_t>(SrcDevice));
+
 
   SrcAsyncInfo.synchronize();
   DstAsyncInfo.synchronize();
+}
+
+EXTERN int __tgt_target_get_device_type(int64_t DeviceId) {
+  assert(PM && "Runtime not initialized");
+  auto DeviceOrErr = PM->getDevice(DeviceId);
+  if (!DeviceOrErr)
+    FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
+
+  return DeviceOrErr->getDeviceType();
 }

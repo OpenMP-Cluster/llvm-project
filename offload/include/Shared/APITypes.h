@@ -79,6 +79,9 @@ struct __tgt_async_info {
   /// ensure it is a valid location while the transfer to the device is
   /// happening.
   KernelLaunchEnvironmentTy KernelLaunchEnvironment;
+
+    double KernelExecutionTime = 0.0;
+
 };
 
 /// This struct contains all of the arguments to a target kernel region launch.
@@ -120,6 +123,13 @@ struct KernelLaunchParamsTy {
   void *Data = nullptr;
   /// Ptrs to the Data entries. Only strictly required for the host plugin.
   void **Ptrs = nullptr;
+};
+
+enum DeviceType {
+  UNKNOWN_DEVICE = 0,
+  CPU_DEVICE,
+  CUDA_DEVICE, // NVIDIA GPUs
+  HSA_DEVICE, // AMD GPUs
 };
 }
 

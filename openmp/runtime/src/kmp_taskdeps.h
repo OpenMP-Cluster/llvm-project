@@ -14,6 +14,7 @@
 #define KMP_TASKDEPS_H
 
 #include "kmp.h"
+#include "kmp_dmdas.h"
 
 #define KMP_ACQUIRE_DEPNODE(gtid, n) __kmp_acquire_lock(&(n)->dn.lock, (gtid))
 #define KMP_RELEASE_DEPNODE(gtid, n) __kmp_release_lock(&(n)->dn.lock, (gtid))
@@ -96,6 +97,8 @@ extern void __kmpc_give_task(kmp_task_t *ptask, kmp_int32 start);
 
 static inline void __kmp_release_deps(kmp_int32 gtid, kmp_taskdata_t *task) {
 
+
+
 #if OMPX_TASKGRAPH
   if (task->is_taskgraph && !(__kmp_tdg_is_recording(task->tdg->tdg_status))) {
     kmp_node_info_t *TaskInfo = &(task->tdg->record_map[task->td_tdg_task_id]);
@@ -105,7 +108,12 @@ static inline void __kmp_release_deps(kmp_int32 gtid, kmp_taskdata_t *task) {
       kmp_node_info_t *successor = &(task->tdg->record_map[successorNumber]);
       kmp_int32 npredecessors = KMP_ATOMIC_DEC(&successor->npredecessors_counter) - 1;
       if (successor->task != nullptr && npredecessors == 0) {
-        __kmp_omp_task(gtid, successor->task, false);
+        if (__kmp_use_dmdas_runtime() &&
+            __kmp_dmdas_owns_task(successor->task)) {
+          __kmp_dmdas_native_ready(successor->task);
+        } else {
+          __kmp_omp_task(gtid, successor->task, false);
+        }
       }
     }
     return;
@@ -163,31 +171,41 @@ static inline void __kmp_release_deps(kmp_int32 gtid, kmp_taskdata_t *task) {
 #if USE_ITT_BUILD && USE_ITT_NOTIFY
       __itt_sync_acquired(successor);
 #endif
+
       KMP_MB();
+
       if (successor->dn.task) {
-        KA_TRACE(20, ("__kmp_release_deps: T#%d successor %p of %p scheduled "
-                      "for execution.\n",
-                      gtid, successor->dn.task, task));
-        // If a regular task depending on a hidden helper task, when the
-        // hidden helper task is done, the regular task should be executed by
-        // its encountering team.
-        if (KMP_HIDDEN_HELPER_THREAD(gtid)) {
-          // Hidden helper thread can only execute hidden helper tasks
-          KMP_ASSERT(task->td_flags.hidden_helper);
-          next_taskdata = KMP_TASK_TO_TASKDATA(successor->dn.task);
-          // If the dependent task is a regular task, we need to push to its
-          // encountering thread's queue; otherwise, it can be pushed to its own
-          // queue.
-          if (!next_taskdata->td_flags.hidden_helper) {
-            kmp_int32 encountering_gtid =
-                next_taskdata->td_alloc_thread->th.th_info.ds.ds_gtid;
-            kmp_int32 encountering_tid = __kmp_tid_from_gtid(encountering_gtid);
-            __kmpc_give_task(successor->dn.task, encountering_tid);
-          } else {
-            __kmp_omp_task(gtid, successor->dn.task, false);
-          }
+        kmp_task_t *successor_task = successor->dn.task;
+
+        // OpenMP maintains its dependency graph, while DMDAS is responsible
+        // for submitting the user tasks it owns.
+        if (__kmp_use_dmdas_runtime() &&
+            __kmp_dmdas_owns_task(successor_task)) {
+          __kmp_dmdas_native_ready(successor_task);
         } else {
-          __kmp_omp_task(gtid, successor->dn.task, false);
+          KA_TRACE(20,
+                   ("__kmp_release_deps: T#%d successor %p of %p scheduled "
+                    "for execution.\n",
+                    gtid, successor_task, task));
+
+          // If a regular task depends on a hidden helper task, execute it on
+          // its encountering team.
+          if (KMP_HIDDEN_HELPER_THREAD(gtid)) {
+            KMP_ASSERT(task->td_flags.hidden_helper);
+            next_taskdata = KMP_TASK_TO_TASKDATA(successor_task);
+
+            if (!next_taskdata->td_flags.hidden_helper) {
+              kmp_int32 encountering_gtid =
+                  next_taskdata->td_alloc_thread->th.th_info.ds.ds_gtid;
+              kmp_int32 encountering_tid =
+                  __kmp_tid_from_gtid(encountering_gtid);
+              __kmpc_give_task(successor_task, encountering_tid);
+            } else {
+              __kmp_omp_task(gtid, successor_task, false);
+            }
+          } else {
+            __kmp_omp_task(gtid, successor_task, false);
+          }
         }
       }
     }
