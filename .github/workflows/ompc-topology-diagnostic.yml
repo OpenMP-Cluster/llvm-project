@@ -1,0 +1,23 @@
+name: OMPC topology diagnostic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  topology:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Inspect CPU topology
+        run: |
+          echo "=== CPU model and topology ==="
+          lscpu
+          echo "=== CPU affinity ==="
+          taskset -pc $$
+          echo "=== Linux CPU topology ==="
+          lscpu -e=CPU,CORE,SOCKET,ONLINE
+          echo "=== Thread siblings ==="
+          for f in /sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list; do
+            echo "$f: $(cat "$f")"
+          done
+          echo "=== CPUINFO topology ==="
+          grep -E '^(processor|physical id|core id|apicid|initial apicid)[[:space:]]*:' /proc/cpuinfo

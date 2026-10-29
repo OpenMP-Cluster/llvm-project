@@ -81,6 +81,7 @@ DLWRAP(cuCtxSetLimit, 2)
 
 DLWRAP(cuEventCreate, 2)
 DLWRAP(cuEventRecord, 2)
+DLWRAP(cuEventElapsedTime, 3)
 DLWRAP(cuStreamWaitEvent, 3)
 DLWRAP(cuEventSynchronize, 1)
 DLWRAP(cuEventDestroy, 1)

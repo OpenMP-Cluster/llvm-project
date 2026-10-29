@@ -14,7 +14,9 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <mutex>
+#include <pthread.h>
 
 /// Forward declaration.
 template <typename Ty> struct Accessor;
@@ -76,14 +78,18 @@ template <typename Ty> struct Accessor {
 private:
   /// Lock the underlying object if there is one.
   void lock() {
-    if (Ptr)
+    if (Ptr) {
+
       Ptr->Mtx.lock();
+    }
   }
 
   /// Unlock the underlying object if there is one.
   void unlock() {
-    if (Ptr)
+    if (Ptr) {
+
       Ptr->Mtx.unlock();
+    }
   }
 
   /// Pointer to the underlying object or null if the accessor lost access,
