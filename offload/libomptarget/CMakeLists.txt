@@ -42,7 +42,7 @@ add_llvm_library(omptarget
   BUILDTREE_ONLY
 )
 target_include_directories(omptarget PRIVATE
-	#	${LIBOMPTARGET_INCLUDE_DIR}/Shared 
+	#	${LIBOMPTARGET_INCLUDE_DIR}/Shared
 	${LIBOMPTARGET_INCLUDE_DIR} ${LIBOMPTARGET_BINARY_INCLUDE_DIR}
 )
 
