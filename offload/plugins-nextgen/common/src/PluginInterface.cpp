@@ -1994,13 +1994,9 @@ int32_t GenericPluginTy::data_retrieve_async(int32_t DeviceId, void *HstPtr,
                                              void *TgtPtr, int64_t Size,
                                              __tgt_async_info *AsyncInfoPtr) {
 
+  GenericDeviceTy &Device = getDevice(DeviceId);
 
-
-
-GenericDeviceTy &Device = getDevice(DeviceId);
-
-auto Err =
-    Device.dataRetrieve(HstPtr, TgtPtr, Size, AsyncInfoPtr);
+  auto Err = Device.dataRetrieve(HstPtr, TgtPtr, Size, AsyncInfoPtr);
 
   // auto Err =
   //    getDevice(DeviceId).dataRetrieve(HstPtr, TgtPtr, Size, AsyncInfoPtr);

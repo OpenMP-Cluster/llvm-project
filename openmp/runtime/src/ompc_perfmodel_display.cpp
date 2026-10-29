@@ -6,106 +6,80 @@
 #include <iomanip>
 #include <cstdint>
 
-struct Model
-{
-    uintptr_t model_id;
-    int worker_id;
+struct Model {
+  uintptr_t model_id;
+  int worker_id;
 
-    int n;
+  int n;
 
-    double sx;
-    double sy;
-    double sxx;
-    double sxy;
+  double sx;
+  double sy;
+  double sxx;
+  double sxy;
 
-    double alpha;
-    double beta;
+  double alpha;
+  double beta;
 };
 
-int main(int argc, char **argv)
-{
-    if (argc != 2) {
-        std::cerr
-            << "Usage: ompc_perfmodel_display <perf_models.dat>\n";
-        return 1;
-    }
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    std::cerr << "Usage: ompc_perfmodel_display <perf_models.dat>\n";
+    return 1;
+  }
 
-    const char *path = argv[1];
+  const char *path = argv[1];
 
-    std::ifstream file(path);
+  std::ifstream file(path);
 
-    if (!file.is_open()) {
-        std::cerr
-            << "Cannot open performance model file: "
-            << path << "\n";
-        return 1;
-    }
+  if (!file.is_open()) {
+    std::cerr << "Cannot open performance model file: " << path << "\n";
+    return 1;
+  }
 
-    std::map<uintptr_t, std::map<int, Model>> models;
+  std::map<uintptr_t, std::map<int, Model>> models;
 
-    std::string line;
+  std::string line;
 
-    while (std::getline(file, line)) {
+  while (std::getline(file, line)) {
 
-        if (line.empty() || line[0] == '#')
-            continue;
+    if (line.empty() || line[0] == '#')
+      continue;
 
-        std::istringstream iss(line);
+    std::istringstream iss(line);
 
-        Model model{};
+    Model model{};
 
-        iss
-            >> std::hex >> model.model_id
-            >> std::dec >> model.worker_id
-            >> model.n
-            >> model.sx
-            >> model.sy
-            >> model.sxx
-            >> model.sxy
-            >> model.alpha
-            >> model.beta;
+    iss >> std::hex >> model.model_id >> std::dec >> model.worker_id >>
+        model.n >> model.sx >> model.sy >> model.sxx >> model.sxy >>
+        model.alpha >> model.beta;
 
-        if (iss.fail())
-            continue;
+    if (iss.fail())
+      continue;
 
-        models[model.model_id][model.worker_id] = model;
-    }
+    models[model.model_id][model.worker_id] = model;
+  }
 
-    std::cout
-        << "OMPC DMDAS Performance Models\n"
-        << "=============================\n\n";
+  std::cout << "OMPC DMDAS Performance Models\n"
+            << "=============================\n\n";
 
-    for (const auto &[model_id, workers] : models) {
+  for (const auto &[model_id, workers] : models) {
 
-        std::cout
-            << "Kernel model: 0x"
-            << std::hex << model_id
-            << std::dec << "\n\n";
+    std::cout << "Kernel model: 0x" << std::hex << model_id << std::dec
+              << "\n\n";
 
-        for (const auto &[worker_id, model] : workers) {
+    for (const auto &[worker_id, model] : workers) {
 
-            double mean =
-                model.n > 0
-                    ? model.sy / model.n
-                    : 0.0;
+      double mean = model.n > 0 ? model.sy / model.n : 0.0;
 
-            std::cout
-                << "  Worker " << worker_id << "\n"
+      std::cout << "  Worker " << worker_id << "\n"
                 << "    samples : " << model.n << "\n"
-                << "    mean    : "
-                << std::setprecision(8)
-                << mean << " s\n"
-                << "    alpha   : "
-                << model.alpha << "\n"
-                << "    beta    : "
-                << model.beta << "\n"
-                << "    model   : T(x) = "
-                << model.alpha
-                << " + "
-                << model.beta
+                << "    mean    : " << std::setprecision(8) << mean << " s\n"
+                << "    alpha   : " << model.alpha << "\n"
+                << "    beta    : " << model.beta << "\n"
+                << "    model   : T(x) = " << model.alpha << " + " << model.beta
                 << " * x\n\n";
-        }
     }
+  }
 
-    return 0;
+  return 0;
 }

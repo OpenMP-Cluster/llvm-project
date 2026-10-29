@@ -13,9 +13,9 @@
 
 #include "OpenMP/OMPT/Interface.h"
 #include "OffloadPolicy.h"
+#include "OpenMP/Mapping.h"
 #include "OpenMP/OMPT/Callback.h"
 #include "OpenMP/omp.h"
-#include "OpenMP/Mapping.h"
 #include "PluginManager.h"
 #include "omptarget.h"
 #include "private.h"
@@ -406,10 +406,10 @@ EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
     int Rc = targetKernel<TaskAsyncInfoWrapperTy>(
         Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
     MarkExecutedTask();
-  return Rc;
+    return Rc;
   }
   int Rc = targetKernel<AsyncInfoTy>(Loc, DeviceId, NumTeams, ThreadLimit,
-                                   HostPtr, KernelArgs);
+                                     HostPtr, KernelArgs);
   MarkExecutedTask();
   return Rc;
 }
@@ -600,43 +600,42 @@ EXTERN void __tgt_target_memtask(void *HstPtr, int64_t Size, int64_t DstDevice,
 
   {
     MappingInfoTy::HDTTMapAccessorTy SrcHDTTMap =
-        SrcDeviceOrErr->getMappingInfo().HostDataToTargetMap.getExclusiveAccessor();
-  
-    TargetPointerResultTy SrcTPR = SrcDeviceOrErr->getMappingInfo().getTargetPointer(
-        SrcHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
-        /*HstPtrName=*/nullptr,
-        /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
-        /*UpdateRef=*/false, /*HasCloseModifier=*/false,
-        /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
-        /*AsyncInfo=*/ SrcAsyncInfo,
-        /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
+        SrcDeviceOrErr->getMappingInfo()
+            .HostDataToTargetMap.getExclusiveAccessor();
+
+    TargetPointerResultTy SrcTPR =
+        SrcDeviceOrErr->getMappingInfo().getTargetPointer(
+            SrcHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
+            /*HstPtrName=*/nullptr,
+            /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
+            /*UpdateRef=*/false, /*HasCloseModifier=*/false,
+            /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
+            /*AsyncInfo=*/SrcAsyncInfo,
+            /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
 
     SrcPtr = SrcTPR.TargetPointer;
   }
 
   {
     MappingInfoTy::HDTTMapAccessorTy DstHDTTMap =
-        DstDeviceOrErr->getMappingInfo().HostDataToTargetMap.getExclusiveAccessor();
+        DstDeviceOrErr->getMappingInfo()
+            .HostDataToTargetMap.getExclusiveAccessor();
 
-    TargetPointerResultTy DstTPR = DstDeviceOrErr->getMappingInfo().getTargetPointer(
-        DstHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
-        /*HstPtrName=*/nullptr,
-        /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
-        /*UpdateRef=*/false, /*HasCloseModifier=*/false,
-        /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
-        /*AsyncInfo=*/ DstAsyncInfo,
-        /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
+    TargetPointerResultTy DstTPR =
+        DstDeviceOrErr->getMappingInfo().getTargetPointer(
+            DstHDTTMap, HstPtr, HstPtr, /*TgtPadding=*/0, Size,
+            /*HstPtrName=*/nullptr,
+            /*HasFlagTo=*/false, /*HasFlagAlways=*/false, /*IsImplicit=*/false,
+            /*UpdateRef=*/false, /*HasCloseModifier=*/false,
+            /*HasPresentModifier=*/false, /*HasHoldModifier=*/false,
+            /*AsyncInfo=*/DstAsyncInfo,
+            /*OwnedTPR=*/nullptr, /*ReleaseHDTTMap=*/false);
 
     DstPtr = DstTPR.TargetPointer;
   }
 
-
-
-  omp_target_memcpy(
-      DstPtr, SrcPtr, Size, 0, 0,
-      static_cast<int32_t>(DstDevice),
-      static_cast<int32_t>(SrcDevice));
-
+  omp_target_memcpy(DstPtr, SrcPtr, Size, 0, 0, static_cast<int32_t>(DstDevice),
+                    static_cast<int32_t>(SrcDevice));
 
   SrcAsyncInfo.synchronize();
   DstAsyncInfo.synchronize();

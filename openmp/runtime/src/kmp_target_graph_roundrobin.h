@@ -30,7 +30,7 @@ private:
 
   /// Do nothing.
   void acquireNewGraphPost() override {}
-  
+
   void resetWeight() override {}
 
   /// Do nothing.

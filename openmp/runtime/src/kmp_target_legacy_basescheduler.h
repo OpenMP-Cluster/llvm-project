@@ -61,9 +61,11 @@
   } while (false)
 #else
 #define DEBUGP(prefix, ...)                                                    \
-  {}
+  {                                                                            \
+  }
 #define DP(...)                                                                \
-  {}
+  {                                                                            \
+  }
 #define REPORT(...) FAILURE_MESSAGE(__VA_ARGS__);
 #endif // OMPTARGET_DEBUG
 
@@ -105,6 +107,7 @@ private:
   std::atomic<size_t> non_nowait_counter;
 
   LegacyNonTaskScheduler non_task_scheduler;
+
 public:
   // Internal scheduler mutex
   std::mutex scheduler_mtx;
@@ -172,7 +175,9 @@ public:
     LegacyBaseScheduler *sch;
 
   public:
-    LockGuard(LegacyBaseScheduler *sch) : sch(sch) { sch->scheduler_mtx.lock(); }
+    LockGuard(LegacyBaseScheduler *sch) : sch(sch) {
+      sch->scheduler_mtx.lock();
+    }
     ~LockGuard() { sch->scheduler_mtx.unlock(); }
   };
 };
@@ -425,11 +430,13 @@ std::list<LegacyTaskPtr> TopologicalOrder(kmp_target_task_map_t *TaskMap);
 /// Sort the tasks in reverse topological order and return a list.
 ///
 /// \see TopologicalOrder
-std::list<LegacyTaskPtr> ReverseTopologicalOrder(kmp_target_task_map_t &TaskMap);
+std::list<LegacyTaskPtr>
+ReverseTopologicalOrder(kmp_target_task_map_t &TaskMap);
 
 /// Sort the tasks in reverse topological order and return a list.
 ///
 /// \see TopologicalOrder
-std::list<LegacyTaskPtr> ReverseTopologicalOrder(kmp_target_task_map_t *TaskMap);
+std::list<LegacyTaskPtr>
+ReverseTopologicalOrder(kmp_target_task_map_t *TaskMap);
 
 #endif /* _OMPTARGET_LEGACY_BASESCHEDULER_H */

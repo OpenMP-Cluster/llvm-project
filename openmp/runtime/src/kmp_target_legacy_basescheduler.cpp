@@ -23,9 +23,9 @@ static constexpr kmp_int64 LEGACY_MAPTYPE_LITERAL = 0x100;
 
 LegacyBaseScheduler::LegacyBaseScheduler()
     : remaining_target_tasks(0), non_nowait_counter(0),
-      non_task_scheduler(LegacyNonTaskScheduler::STATIC),
-      schedulingThread(-1),graph_dump_dir_path(),
-      graph_counter(0), schedule_map(), task_map(nullptr) {
+      non_task_scheduler(LegacyNonTaskScheduler::STATIC), schedulingThread(-1),
+      graph_dump_dir_path(), graph_counter(0), schedule_map(),
+      task_map(nullptr) {
 
   // Read environment variables
   if (char *env_str = std::getenv("OMPCLUSTER_TASK_GRAPH_DUMP_PATH")) {
@@ -64,9 +64,7 @@ void LegacyBaseScheduler::setSchedulingThread(int32_t gtid) {
   }
 }
 
-void LegacyBaseScheduler::resetSchedulingThread() {
-  schedulingThread = -1;
-}
+void LegacyBaseScheduler::resetSchedulingThread() { schedulingThread = -1; }
 
 bool LegacyBaseScheduler::isSchedulingThread(int32_t gtid) {
   return schedulingThread == gtid;
@@ -86,28 +84,26 @@ void LegacyBaseScheduler::acquireNewGraph() {
   waitOmpGraphCreation();
   // Remove any internal state of the current task graph.
   auto temporary_task_map = __kmpc_target_task_map_create();
-  if ( temporary_task_map == nullptr){
+  if (temporary_task_map == nullptr) {
     return;
   }
 
   bool all_already_known = task_map != nullptr;
 
-if (all_already_known) {
-  for (int idx = 0; idx < temporary_task_map->num_tasks; ++idx) {
-    const int task_id = temporary_task_map->tasks[idx].task_id;
-    if (schedule_map.count(task_id) == 0) {
-      all_already_known = false;
-      break;
+  if (all_already_known) {
+    for (int idx = 0; idx < temporary_task_map->num_tasks; ++idx) {
+      const int task_id = temporary_task_map->tasks[idx].task_id;
+      if (schedule_map.count(task_id) == 0) {
+        all_already_known = false;
+        break;
+      }
     }
   }
-}
-
-
 
   if (all_already_known) {
-  __kmpc_target_task_map_free(temporary_task_map);
-  return;
-}
+    __kmpc_target_task_map_free(temporary_task_map);
+    return;
+  }
 
   if (task_map != nullptr) {
     isScheduleDone = 0;
@@ -131,43 +127,42 @@ if (all_already_known) {
 
   std::unordered_map<void *, int64_t> size_map;
 
-// Pass 1: collect all sizes provided by target-data tasks.
-for (int idx = 0; idx < task_map->num_tasks; ++idx) {
-  const kmp_target_task_t &task = task_map->tasks[idx];
+  // Pass 1: collect all sizes provided by target-data tasks.
+  for (int idx = 0; idx < task_map->num_tasks; ++idx) {
+    const kmp_target_task_t &task = task_map->tasks[idx];
 
-  if (!task.is_target_task)
-    continue;
+    if (!task.is_target_task)
+      continue;
 
-  if (!isLegacyTargetDataTask(task))
-    continue;
+    if (!isLegacyTargetDataTask(task))
+      continue;
 
-  for (int32_t i = 0; i < task.target_data.num_args; ++i)
-    size_map[task.target_data.args[i]] = task.target_data.arg_sizes[i];
-}
+    for (int32_t i = 0; i < task.target_data.num_args; ++i)
+      size_map[task.target_data.args[i]] = task.target_data.arg_sizes[i];
+  }
 
-// Pass 2: initialize scheduler state and propagate sizes to compute tasks.
-for (int idx = 0; idx < task_map->num_tasks; ++idx) {
-  const kmp_target_task_t &task = task_map->tasks[idx];
+  // Pass 2: initialize scheduler state and propagate sizes to compute tasks.
+  for (int idx = 0; idx < task_map->num_tasks; ++idx) {
+    const kmp_target_task_t &task = task_map->tasks[idx];
 
-  if (!task.is_target_task)
-    continue;
+    if (!task.is_target_task)
+      continue;
 
-  assertm(schedule_map.count(task.task_id) == 0,
-          "Task already present in legacy schedule map");
+    assertm(schedule_map.count(task.task_id) == 0,
+            "Task already present in legacy schedule map");
 
-  schedule_map[task.task_id] = {
-      LegacyTaskState::CREATED, -1, -1, -1, &task};
+    schedule_map[task.task_id] = {LegacyTaskState::CREATED, -1, -1, -1, &task};
 
-  remaining_target_tasks++;
+    remaining_target_tasks++;
 
-  if (!isLegacyTargetDataTask(task)) {
-    for (int32_t i = 0; i < task.target_data.num_args; ++i) {
-      auto it = size_map.find(task.target_data.args[i]);
-      if (it != size_map.end())
-        task.target_data.arg_sizes[i] = it->second;
+    if (!isLegacyTargetDataTask(task)) {
+      for (int32_t i = 0; i < task.target_data.num_args; ++i) {
+        auto it = size_map.find(task.target_data.args[i]);
+        if (it != size_map.end())
+          task.target_data.arg_sizes[i] = it->second;
+      }
     }
   }
-}
   if (graph_counter != 0) {
     graph_counter++;
   }
@@ -214,8 +209,7 @@ void LegacyBaseScheduler::acquireAndScheduleGraph() {
 
         for (int32_t i = 0; i < task.target_data.num_args; ++i) {
           for (int32_t j = 0; j < succ.target_data.num_args; ++j) {
-            if (task.target_data.args_base[i] !=
-                succ.target_data.args_base[j])
+            if (task.target_data.args_base[i] != succ.target_data.args_base[j])
               continue;
 
             kmp_taskdata_t *src_td = KMP_TASK_TO_TASKDATA(task.task);
@@ -228,8 +222,8 @@ void LegacyBaseScheduler::acquireAndScheduleGraph() {
 
             bool carries_dependency = false;
 
-            for (int32_t sd = 0;
-                 sd < task.num_deps && !carries_dependency; ++sd) {
+            for (int32_t sd = 0; sd < task.num_deps && !carries_dependency;
+                 ++sd) {
               if (!task.deps[sd].dep_type.out)
                 continue;
 
@@ -321,7 +315,8 @@ void LegacyBaseScheduler::pinTask(int32_t task_id, int LegacyDeviceId) {
   }
 }
 
-void LegacyBaseScheduler::setTaskState(int32_t task_id, LegacyTaskState new_state) {
+void LegacyBaseScheduler::setTaskState(int32_t task_id,
+                                       LegacyTaskState new_state) {
   assert(task_map != nullptr);
   assert(schedule_map.count(task_id) == 1);
   assert(new_state >= LegacyTaskState::DISPATCHED);
@@ -345,7 +340,7 @@ void LegacyBaseScheduler::setTaskState(int32_t task_id, LegacyTaskState new_stat
 }
 
 void LegacyBaseScheduler::setTaskState(int32_t task_id, int device_id,
-                                 LegacyTaskState new_state) {
+                                       LegacyTaskState new_state) {
   // Update rank that executed, in case of failures, the translation will say
   // the real device that executed the task. Do not update if the task is FAILED
   // and the new state is EXECUTED, because this is the case where the graph was
@@ -371,14 +366,13 @@ LegacyTaskScheduleData LegacyBaseScheduler::getTask(int task_id) {
   }
 
   return LegacyTaskScheduleData{.state = LegacyTaskState::UNDEFINED,
-                          .rank = -1,
-                          .translated_rank = -1,
-                          .task = nullptr};
+                                .rank = -1,
+                                .translated_rank = -1,
+                                .task = nullptr};
 }
 
 bool LegacyBaseScheduler::isTargetDataTask(int32_t task_id) {
-  kmp_target_task_t *task =
-      __kmpc_target_task_map_get(task_map, task_id);
+  kmp_target_task_t *task = __kmpc_target_task_map_get(task_map, task_id);
 
   if (task == nullptr)
     return false;
@@ -441,8 +435,9 @@ void LegacyBaseScheduler::dumpTaskGraph() {
     // Print graph node
     dot << "  V" << tid << " [label=<<B>ID " << tid
         << "</B><BR /><FONT POINT-SIZE=\"10\">Rank " << trank
-        << ((schedule_map[tid].state == LegacyTaskState::SAVED) ? "<BR />Saved\""
-                                                          : "<BR />Unsaved\"");
+        << ((schedule_map[tid].state == LegacyTaskState::SAVED)
+                ? "<BR />Saved\""
+                : "<BR />Unsaved\"");
 
     if (!tinfo.empty()) {
       dot << "<BR />" << tinfo;
@@ -521,13 +516,15 @@ std::list<LegacyTaskPtr> TopologicalOrder(kmp_target_task_map_t *TaskMap) {
   return TopologicalOrder(*TaskMap);
 }
 
-std::list<LegacyTaskPtr> ReverseTopologicalOrder(kmp_target_task_map_t &TaskMap) {
+std::list<LegacyTaskPtr>
+ReverseTopologicalOrder(kmp_target_task_map_t &TaskMap) {
   auto List = TopologicalOrder(TaskMap);
   List.reverse();
   return List;
 }
 
-std::list<LegacyTaskPtr> ReverseTopologicalOrder(kmp_target_task_map_t *TaskMap) {
+std::list<LegacyTaskPtr>
+ReverseTopologicalOrder(kmp_target_task_map_t *TaskMap) {
   assert(TaskMap != nullptr);
   return ReverseTopologicalOrder(*TaskMap);
 }

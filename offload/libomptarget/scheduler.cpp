@@ -11,10 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "scheduler.h"
+#include "PluginManager.h"
 #include "device.h"
 #include "private.h"
 #include "rtl.h"
-#include "PluginManager.h"
 
 // Scheduler interface in libomptarget
 // =============================================================================
@@ -33,39 +33,26 @@ int Schedule(ident_t *Loc, int DeviceId) {
   int ScheduledDevId = -1;
   bool DMDASOwned = false;
 
-
-
   if (__kmpc_dmdas_get_task_device) {
-    ScheduledDevId =
-        __kmpc_dmdas_get_task_device(TaskId);
+    ScheduledDevId = __kmpc_dmdas_get_task_device(TaskId);
 
     if (ScheduledDevId >= 0)
       DMDASOwned = true;
   }
 
-
-
   if (!DMDASOwned) {
 
-
-    ScheduledDevId =
-        __kmpc_scheduleTask(TaskId);
+    ScheduledDevId = __kmpc_scheduleTask(TaskId);
   }
 
   if (TaskId != -1) {
 
-
-
     if (!DMDASOwned) {
-      __kmpc_setTaskState(
-          TaskId,
-          TaskState::DISPATCHED);
+      __kmpc_setTaskState(TaskId, TaskState::DISPATCHED);
     }
 
     if (__kmpc_dmdas_target_dispatched)
       __kmpc_dmdas_target_dispatched(TaskId);
-
-
   }
 
   return ScheduledDevId;
@@ -89,21 +76,14 @@ void MarkExecutedTask() {
   bool DMDASOwned = false;
 
   if (__kmpc_dmdas_get_task_device) {
-    const int DMDASDevice =
-        __kmpc_dmdas_get_task_device(TaskId);
+    const int DMDASDevice = __kmpc_dmdas_get_task_device(TaskId);
 
     DMDASOwned = DMDASDevice >= 0;
   }
 
-
-
   if (!DMDASOwned) {
-    __kmpc_setTaskState(
-        TaskId,
-        TaskState::EXECUTED);
+    __kmpc_setTaskState(TaskId, TaskState::EXECUTED);
   }
-
-
 }
 
 void MarkExecutedPinnedTask(const DeviceTy &Device) {
@@ -115,20 +95,16 @@ void MarkExecutedPinnedTask(const DeviceTy &Device) {
   bool DMDASOwned = false;
 
   if (__kmpc_dmdas_get_task_device) {
-    const int DMDASDevice =
-        __kmpc_dmdas_get_task_device(TaskId);
+    const int DMDASDevice = __kmpc_dmdas_get_task_device(TaskId);
 
     DMDASOwned = DMDASDevice >= 0;
   }
 
   if (!DMDASOwned) {
-    __kmpc_setTaskState(
-        TaskId,
-        TaskState::EXECUTED);
+    __kmpc_setTaskState(TaskId, TaskState::EXECUTED);
   }
 }
 
 int32_t GetCurrentTargetTaskID() {
   return __kmpc_target_task_current_task_id();
 }
-

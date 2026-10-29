@@ -12,12 +12,12 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdio>
 #include <ffi.h>
 #include <string>
-#include <unordered_map>
 #include <time.h>
-#include <cstdio>
 #include <unistd.h>
+#include <unordered_map>
 
 #include "Shared/Debug.h"
 #include "Shared/Environment.h"
@@ -114,65 +114,53 @@ struct GenELF64KernelTy : public GenericKernelTy {
     long Return;
 
     static std::atomic<int> ActiveKernels{0};
-static std::atomic<int> MaxActiveKernels{0};
+    static std::atomic<int> MaxActiveKernels{0};
 
-int active =
-    ActiveKernels.fetch_add(1) + 1;
+    int active = ActiveKernels.fetch_add(1) + 1;
 
-int current_max =
-    MaxActiveKernels.load();
+    int current_max = MaxActiveKernels.load();
 
-while (active > current_max &&
-       !MaxActiveKernels.compare_exchange_weak(
-           current_max,
-           active)) {
-}
+    while (active > current_max &&
+           !MaxActiveKernels.compare_exchange_weak(current_max, active)) {
+    }
 
-/*printf(
-    "KERNEL CONCURRENCY START "
-    "pid=%d device=%d active=%d max=%d\n",
-    static_cast<int>(getpid()),
-    GenericDevice.getDeviceId(),
-    active,
-    MaxActiveKernels.load());
+    /*printf(
+        "KERNEL CONCURRENCY START "
+        "pid=%d device=%d active=%d max=%d\n",
+        static_cast<int>(getpid()),
+        GenericDevice.getDeviceId(),
+        active,
+        MaxActiveKernels.load());
 
-fflush(stdout);*/
+    fflush(stdout);*/
 
-struct timespec Start, End;
-clock_gettime(CLOCK_MONOTONIC, &Start);
+    struct timespec Start, End;
+    clock_gettime(CLOCK_MONOTONIC, &Start);
 
-ffi_call(
-    &Cif,
-    Func,
-    &Return,
-    (void **)LaunchParams.Ptrs);
+    ffi_call(&Cif, Func, &Return, (void **)LaunchParams.Ptrs);
 
-clock_gettime(CLOCK_MONOTONIC, &End);
+    clock_gettime(CLOCK_MONOTONIC, &End);
 
-active =
-    ActiveKernels.fetch_sub(1) - 1;
+    active = ActiveKernels.fetch_sub(1) - 1;
 
-/*printf(
-    "KERNEL CONCURRENCY end "
-    "pid=%d device=%d active=%d max=%d\n",
-    static_cast<int>(getpid()),
-    GenericDevice.getDeviceId(),
-    active,
-    MaxActiveKernels.load());*/
+    /*printf(
+        "KERNEL CONCURRENCY end "
+        "pid=%d device=%d active=%d max=%d\n",
+        static_cast<int>(getpid()),
+        GenericDevice.getDeviceId(),
+        active,
+        MaxActiveKernels.load());*/
 
-fflush(stdout);
+    fflush(stdout);
 
     double KernelTime =
-        (End.tv_sec - Start.tv_sec) +
-        (End.tv_nsec - Start.tv_nsec) / 1e9;
+        (End.tv_sec - Start.tv_sec) + (End.tv_nsec - Start.tv_nsec) / 1e9;
 
     // Store the real synchronous CPU kernel execution time.
     __tgt_async_info *AsyncInfoPtr = AsyncInfoWrapper;
 
     if (AsyncInfoPtr)
       AsyncInfoPtr->KernelExecutionTime = KernelTime;
-
-
 
     return Plugin::success();
   }
@@ -337,10 +325,7 @@ struct GenELF64DeviceTy : public GenericDeviceTy {
   Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
                          AsyncInfoWrapperTy &AsyncInfoWrapper) override {
 
-
-
     std::memcpy(HstPtr, TgtPtr, Size);
-
 
     return Plugin::success();
   }

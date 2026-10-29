@@ -874,7 +874,9 @@ struct GenericDeviceTy : public DeviceAllocatorTy {
   virtual Error obtainInfoImpl(InfoQueueTy &Info) = 0;
 
   /// Get the device type
-  virtual DeviceType getDeviceType() const { return DeviceType::UNKNOWN_DEVICE; }
+  virtual DeviceType getDeviceType() const {
+    return DeviceType::UNKNOWN_DEVICE;
+  }
 
   /// Getters of the grid values.
   uint32_t getWarpSize() const { return GridValues.GV_Warp_Size; }

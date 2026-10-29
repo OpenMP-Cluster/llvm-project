@@ -106,8 +106,7 @@ static void thread_free(kmp_info_t *thread, void *ptr) {
   }
 }
 
-static void add_to_succ_list(kmp_info_t *thread,
-                             kmp_target_task_t *target_task,
+static void add_to_succ_list(kmp_info_t *thread, kmp_target_task_t *target_task,
                              kmp_target_task_t *succ_task,
                              bool update_pred = true) {
   auto *succ = thread_malloc<kmp_target_task_list_node_t>(thread, 1);
@@ -124,8 +123,7 @@ static void add_to_succ_list(kmp_info_t *thread,
     succ_task->num_predecessors++;
 }
 
-static void remove_from_pred_list(kmp_info_t *thread,
-                                  kmp_target_task_t *task,
+static void remove_from_pred_list(kmp_info_t *thread, kmp_target_task_t *task,
                                   kmp_target_task_t *pred_task) {
   assertm(task != nullptr && pred_task != nullptr,
           "task and pred_task cannot be null");
@@ -210,7 +208,7 @@ kmp_target_task_data::operator=(const kmp_target_task_data &other) {
 }
 
 void kmp_target_task_data::allocBuffers() {
-  KG_TRACE(10,("kmp_target_task_data::allocBuffers (start)\n"));
+  KG_TRACE(10, ("kmp_target_task_data::allocBuffers (start)\n"));
   if (num_args > 0) {
     // TODO: Check why we cannot use thread fast allocation without getting
     // address errors when freeing them.
@@ -219,11 +217,11 @@ void kmp_target_task_data::allocBuffers() {
     arg_sizes = (kmp_int64 *)__kmp_allocate(sizeof(kmp_int64) * num_args);
     arg_types = (kmp_int64 *)__kmp_allocate(sizeof(kmp_int64) * num_args);
   }
-  KG_TRACE(10,("kmp_target_task_data::allocBuffers (end)\n"));
+  KG_TRACE(10, ("kmp_target_task_data::allocBuffers (end)\n"));
 }
 
 void kmp_target_task_data::deleteBuffers() {
-  KG_TRACE(10,("kmp_target_task_data::deleteBuffers (start)\n"));
+  KG_TRACE(10, ("kmp_target_task_data::deleteBuffers (start)\n"));
   if (num_args > 0) {
     __kmp_free(args_base);
     __kmp_free(args);
@@ -234,20 +232,20 @@ void kmp_target_task_data::deleteBuffers() {
   args = nullptr;
   arg_sizes = nullptr;
   arg_types = nullptr;
-  KG_TRACE(10,("kmp_target_task_data::deleteBuffers (end)\n"));
+  KG_TRACE(10, ("kmp_target_task_data::deleteBuffers (end)\n"));
 }
 
 void kmp_target_task_data::copyBuffers(void **args_base_p, void **args_p,
                                        kmp_int64 *arg_sizes_p,
                                        kmp_int64 *arg_types_p) {
-  KG_TRACE(10,("kmp_target_task_data::copyBuffers (start)\n"));
+  KG_TRACE(10, ("kmp_target_task_data::copyBuffers (start)\n"));
   if (num_args > 0) {
     std::copy_n(args_base_p, num_args, args_base);
     std::copy_n(args_p, num_args, args);
     std::copy_n(arg_sizes_p, num_args, arg_sizes);
     std::copy_n(arg_types_p, num_args, arg_types);
   }
-  KG_TRACE(10,("kmp_target_task_data::copyBuffers (end)\n"));
+  KG_TRACE(10, ("kmp_target_task_data::copyBuffers (end)\n"));
 }
 
 // Task and graph management
@@ -283,7 +281,6 @@ void __kmpc_add_target_task_with_deps(
   // Create target task structure
   const kmp_int32 task_id = taskdata->td_task_id;
 
-
   kmp_target_task_t &new_task = gcontext->active_tasks[taskdata->td_task_id];
   new_task.task_id = task_id;
   new_task.task = KMP_TASKDATA_TO_TASK(const_cast<kmp_taskdata_t *>(taskdata));
@@ -291,7 +288,6 @@ void __kmpc_add_target_task_with_deps(
   if (new_task.is_target_task) {
     new_task.target_data = *(taskdata->td_target_info);
   }
-
 
   // Process dependencies
   new_task.deps =
@@ -440,7 +436,6 @@ void __kmpc_remove_root_target_task(kmp_int32 task_id) {
 // Task graph access functions
 // =============================================================================
 
-
 kmp_target_task_map_t *__kmpc_target_task_map_create() {
   // Init global target task context
   init_target_task_context();
@@ -448,8 +443,6 @@ kmp_target_task_map_t *__kmpc_target_task_map_create() {
   // Guarantee that no task is being removed when someone creates a task map.
   // This also synchronizes the access to the 'user_hash_map'
   std::unique_lock<std::mutex> ctx_lk(gcontext->ctx_mutex);
-
-
 
   if (gcontext->active_tasks.empty()) {
     return nullptr;
@@ -569,7 +562,6 @@ kmp_target_task_t *__kmpc_target_task_map_get(kmp_target_task_map_t *task_map,
   return gcontext->user_hash_map[task_map][task_id];
 }
 
-
 void __kmpc_record_target_data_device(kmp_int32 device_id) {
   kmp_info_t *thread = get_omp_thread();
   if (!thread)
@@ -584,9 +576,7 @@ void __kmpc_record_target_data_device(kmp_int32 device_id) {
     return;
 
   task->td_target_info->recording_device_id = device_id;
-
 }
-
 
 kmp_int32 __kmpc_target_task_current_task_id() {
   const kmp_info_t *thread = get_omp_thread();
@@ -606,7 +596,6 @@ kmp_int32 __kmpc_target_task_current_task_id() {
 
   return thread->th.th_current_task->td_task_id;
 }
-
 
 bool __kmpc_is_graph_builder_tasking() {
   if (get_omp_thread() == nullptr || gcontext->graph_builder_gtid < 0) {
@@ -634,8 +623,7 @@ bool __kmpc_has_active_tasks() {
 
 // Add the dependencies to a task.
 void __kmpc_set_deps(kmp_node_info *task, kmp_int32 ndeps,
-                     const kmp_depend_info_t *dep_list,
-                     kmp_int32 ndeps_noalias,
+                     const kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
                      const kmp_depend_info_t *dep_list_noalias) {
 
   KG_TRACE(10, ("__kmpc_set_deps (start)\n"));
@@ -684,4 +672,3 @@ void __kmpc_set_deps(kmp_node_info *task, kmp_int32 ndeps,
 
   KG_TRACE(10, ("__kmpc_set_deps (end)\n"));
 }
-

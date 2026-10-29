@@ -98,9 +98,7 @@ llvm::Error DeviceTy::init() {
 }
 
 // Get the device type
-DeviceType DeviceTy::getDeviceType() {
-  return RTL->getDeviceType(RTLDeviceID);
-}
+DeviceType DeviceTy::getDeviceType() { return RTL->getDeviceType(RTLDeviceID); }
 
 // Load binary to device.
 llvm::Expected<__tgt_device_binary>
@@ -170,16 +168,10 @@ int32_t DeviceTy::retrieveData(void *HstPtrBegin, void *TgtPtrBegin,
           DeviceID, TgtPtrBegin, omp_get_initial_device(), HstPtrBegin, Size,
           /*CodePtr=*/OMPT_GET_RETURN_ADDRESS);)
 
+  int32_t Ret = RTL->data_retrieve_async(RTLDeviceID, HstPtrBegin, TgtPtrBegin,
+                                         Size, AsyncInfo);
 
-
-
-int32_t Ret =
-    RTL->data_retrieve_async(RTLDeviceID, HstPtrBegin,
-                             TgtPtrBegin, Size, AsyncInfo);
-
-
-
-return Ret;
+  return Ret;
 }
 
 // Copy data from current device to destination device directly

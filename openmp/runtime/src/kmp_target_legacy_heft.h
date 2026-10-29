@@ -85,9 +85,9 @@ public:
   ///
   /// This table is filled by the scheduler in order to find the device which
   /// minimizes the earliest finish time.
-  using EarliestTimeMap =
-      std::unordered_map<LegacyTaskPtr,
-                         std::unordered_map<LegacyDeviceId, double, LegacyDeviceId::Hash>>;
+  using EarliestTimeMap = std::unordered_map<
+      LegacyTaskPtr,
+      std::unordered_map<LegacyDeviceId, double, LegacyDeviceId::Hash>>;
 
   /// Maps a task to a timepoint.
   ///
@@ -99,7 +99,8 @@ public:
   ///
   /// Maps a device ID to the next timepoint it will be available for executing
   /// a new task.
-  using DeviceAvailMap = std::unordered_map<LegacyDeviceId, double, LegacyDeviceId::Hash>;
+  using DeviceAvailMap =
+      std::unordered_map<LegacyDeviceId, double, LegacyDeviceId::Hash>;
 
   /// Upward rank map.
   ///
@@ -110,7 +111,8 @@ public:
   ///
   /// Indicates how many bytes should be transferred from one task to another.
   using CommunicationMap =
-      std::unordered_map<LegacyTaskPtr, std::unordered_map<LegacyTaskPtr, double>>;
+      std::unordered_map<LegacyTaskPtr,
+                         std::unordered_map<LegacyTaskPtr, double>>;
 
   /// Computation map.
   ///
@@ -121,7 +123,8 @@ public:
 
 public:
   /// Default constructor.
-  LegacyHEFTContext(LegacyScheduleMap &Schedule, kmp_target_task_map_t *TaskMap);
+  LegacyHEFTContext(LegacyScheduleMap &Schedule,
+                    kmp_target_task_map_t *TaskMap);
 
   /// Destructor.
   ~LegacyHEFTContext() = default;

@@ -26,7 +26,8 @@ namespace detail {
 // Implementation of LegacyHEFTContext
 // =============================================================================
 
-LegacyHEFTContext::LegacyHEFTContext(LegacyScheduleMap &Schedule, kmp_target_task_map_t *TaskMap)
+LegacyHEFTContext::LegacyHEFTContext(LegacyScheduleMap &Schedule,
+                                     kmp_target_task_map_t *TaskMap)
     : CommMultiplier(1.0), DefaultCompCost(100.0), DefaultCommCost(1.0),
       NumThreads(1), TaskMap(TaskMap),
       Schedule(Schedule) /*, ProfileInfo({})*/ {
@@ -44,8 +45,6 @@ LegacyHEFTContext::LegacyHEFTContext(LegacyScheduleMap &Schedule, kmp_target_tas
 
   if (char *EnvStr = std::getenv("OMPCLUSTER_NUM_EXEC_EVENT_HANDLERS"))
     NumThreads = std::stoi(EnvStr);
-
-
 }
 
 void LegacyHEFTContext::computeUpwardRanks() {
@@ -63,7 +62,8 @@ void LegacyHEFTContext::computeUpwardRanks() {
   }
 }
 
-double LegacyHEFTContext::computeEST(LegacyTaskPtr Task, LegacyDeviceId Device) {
+double LegacyHEFTContext::computeEST(LegacyTaskPtr Task,
+                                     LegacyDeviceId Device) {
   double MaxPredEST = 0.0;
 
   // Iterate over predecessors
@@ -89,7 +89,8 @@ double LegacyHEFTContext::computeEST(LegacyTaskPtr Task, LegacyDeviceId Device) 
   return EST[Task][Device];
 }
 
-double LegacyHEFTContext::computeEFT(LegacyTaskPtr Task, LegacyDeviceId Device) {
+double LegacyHEFTContext::computeEFT(LegacyTaskPtr Task,
+                                     LegacyDeviceId Device) {
   // Calculate EST for task id, rank pair if it does not exist
   if (EST.count(Task) == 0 || EST[Task].count(Device) == 0)
     computeEST(Task, Device);
@@ -98,12 +99,15 @@ double LegacyHEFTContext::computeEFT(LegacyTaskPtr Task, LegacyDeviceId Device) 
   return EFT[Task][Device];
 }
 
-double LegacyHEFTContext::scheduleTask(LegacyTaskPtr Task, LegacyDeviceId Device) {
+double LegacyHEFTContext::scheduleTask(LegacyTaskPtr Task,
+                                       LegacyDeviceId Device) {
   // Do not change state of FAILED tasks during the reschedule
-  bool IsRestartingTask = Schedule[Task->task_id].state == LegacyTaskState::FAILED;
+  bool IsRestartingTask =
+      Schedule[Task->task_id].state == LegacyTaskState::FAILED;
 
   Schedule[Task->task_id] = {
-      .state = IsRestartingTask ? LegacyTaskState::FAILED : LegacyTaskState::SCHEDULED,
+      .state = IsRestartingTask ? LegacyTaskState::FAILED
+                                : LegacyTaskState::SCHEDULED,
       .rank = Device.Rank,
       .thread = Device.Thread,
       .translated_rank = -1,
@@ -126,7 +130,8 @@ double LegacyHEFTContext::scheduleTaskOnBestRank(LegacyTaskPtr Task) {
   return DeviceAvail[BestRank->first];
 }
 
-void LegacyHEFTContext::forceScheduleTask(LegacyTaskPtr Task, LegacyDeviceId Device) {
+void LegacyHEFTContext::forceScheduleTask(LegacyTaskPtr Task,
+                                          LegacyDeviceId Device) {
   computeEFT(Task, Device);
   scheduleTaskOnBestRank(Task);
 }
@@ -145,7 +150,8 @@ LegacyPriorityQueue LegacyHEFTContext::buildQueue() const {
   return Pqueue;
 }
 
-std::vector<LegacyDeviceId> LegacyHEFTContext::buildDeviceList(int32_t NumRanks) const {
+std::vector<LegacyDeviceId>
+LegacyHEFTContext::buildDeviceList(int32_t NumRanks) const {
   std::vector<LegacyDeviceId> Devices;
   Devices.reserve(NumRanks);
   for (int32_t R = 1; R <= NumRanks; R++)
@@ -171,9 +177,9 @@ void LegacyHEFTContext::setTaskMap(kmp_target_task_map_t *NewTaskMap) {
 }
 
 double LegacyHEFTContext::computeCommCost(const kmp_target_task_t &A,
-                                    LegacyDeviceId DeviceA,
-                                    const kmp_target_task_t &B,
-                                    LegacyDeviceId DeviceB) {
+                                          LegacyDeviceId DeviceA,
+                                          const kmp_target_task_t &B,
+                                          LegacyDeviceId DeviceB) {
   // If the tasks are to execute on the same rank, we do not pay for the
   // communication because no data needs to be moved.
   if (DeviceA.Rank == DeviceB.Rank)
@@ -187,7 +193,7 @@ double LegacyHEFTContext::computeCommCost(const kmp_target_task_t &A,
 /// Search for all `out` dependencies of A which are also `in` dependencies of B
 /// and accumulate the size of those dependencies (in bytes).
 double LegacyHEFTContext::computeAvgCommCost(const kmp_target_task_t &A,
-                                       const kmp_target_task_t &B) {
+                                             const kmp_target_task_t &B) {
   double TotalBytes = 0.0;
 
   // If the communication cost was already computed, then use the cached value.
@@ -229,7 +235,7 @@ double LegacyHEFTContext::computeAvgCompCost(const kmp_target_task_t &Task) {
 }
 
 double LegacyHEFTContext::computeCompCost(const kmp_target_task_t &Task,
-                                    LegacyDeviceId Device) {
+                                          LegacyDeviceId Device) {
   // FIXME: the actual rank of the task is not being taken into account.
   // Therefore we are assuming the the task takes the same amount of time to be
   // computed independent of the device it is scheduled.
@@ -277,8 +283,9 @@ void LegacyHEFTContext::dump(int32_t NumDevices) {
     fprintf(fp,
             "%04d  0x%08lx  %10.2lf  %10.2lf  %10.2lf  %7d  %7d  %7d  %7d  %4d",
             task.task_id, ofid, UpwardRank[&task], AST[&task], AFT[&task],
-            Schedule[task.task_id].rank, isLegacyRootTask(task), isLegacyExitTask(task),
-            isLegacyTargetDataTask(task), isLegacyClassicalTask(task));
+            Schedule[task.task_id].rank, isLegacyRootTask(task),
+            isLegacyExitTask(task), isLegacyTargetDataTask(task),
+            isLegacyClassicalTask(task));
     for (const auto &Device : Devices)
       fprintf(fp, "  %10.2lf", EST[&task][Device]);
     for (const auto &Device : Devices)
@@ -347,7 +354,8 @@ void LegacyHEFTScheduler::scheduleGraph() {
     PQueue.pop_front();
     // Do not reschedule already executed or saved tasks
     const auto Data = schedule_map[Task->task_id];
-    if (Data.state > LegacyTaskState::SCHEDULED && Data.state != LegacyTaskState::FAILED)
+    if (Data.state > LegacyTaskState::SCHEDULED &&
+        Data.state != LegacyTaskState::FAILED)
       continue;
 
     // Defer the scheduling for target data tasks
@@ -374,7 +382,8 @@ void LegacyHEFTScheduler::scheduleGraph() {
     const auto *Task = Data.task;
 
     // Do not reschedule already executed or saved tasks
-    if (Data.state > LegacyTaskState::SCHEDULED && Data.state != LegacyTaskState::FAILED)
+    if (Data.state > LegacyTaskState::SCHEDULED &&
+        Data.state != LegacyTaskState::FAILED)
       continue;
 
     // These are already scheduled.

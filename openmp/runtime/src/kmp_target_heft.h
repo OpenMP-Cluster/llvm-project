@@ -15,7 +15,7 @@
 #define _OMPTARGET_HEFT_H
 
 #include "kmp_target_basescheduler.h"
-#include "kmp.h" 
+#include "kmp.h"
 
 #include <deque>
 
@@ -112,11 +112,13 @@ public:
   ///
   /// Indicates how long each task should take to execute after being scheduled.
   using AverageComputationMap = std::unordered_map<TaskPtr, double>;
-  
+
   /// Computation map.
   ///
-  /// Indicates how long each task should take to execute after being scheduled on each device.
-  using ComputationMap = std::unordered_map<TaskPtr,std::unordered_map<kmp_int32,double>>;
+  /// Indicates how long each task should take to execute after being scheduled
+  /// on each device.
+  using ComputationMap =
+      std::unordered_map<TaskPtr, std::unordered_map<kmp_int32, double>>;
 
   using kmp_device_type = int;
 
@@ -161,9 +163,13 @@ public:
   ///
   /// \param task the task
   inline bool isDeferredTask(const kmp_node_info &Task) const {
-    bool failed = isTargetDataTask(Task) &&
-                  (*get_schedule_map(tdg->tdg_id))[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::FAILED;
-    return (*get_schedule_map(tdg->tdg_id))[KMP_TASKNODE_TO_TASKID(Task)].state == TaskState::DEFERRED || failed;
+    bool failed =
+        isTargetDataTask(Task) &&
+        (*get_schedule_map(tdg->tdg_id))[KMP_TASKNODE_TO_TASKID(Task)].state ==
+            TaskState::FAILED;
+    return (*get_schedule_map(tdg->tdg_id))[KMP_TASKNODE_TO_TASKID(Task)]
+                   .state == TaskState::DEFERRED ||
+           failed;
   }
 
   /// Build a priority queue from the upward rank map.
@@ -181,8 +187,10 @@ public:
   void clearCompCost();
 
   /// Construct CompCost Matrix from profiled informations
-  void interpolateCompCost(kmp_int32 scheduling_iteration_counter, kmp_int32 scheduling_policy, kmp_int32 initial_iteration);
- 
+  void interpolateCompCost(kmp_int32 scheduling_iteration_counter,
+                           kmp_int32 scheduling_policy,
+                           kmp_int32 initial_iteration);
+
   /// Set a new task map.
   void setTaskMap(kmp_int32 tdg_idx);
 
@@ -196,7 +204,7 @@ private:
   void linearInterpolation();
   void heterogeneousLinearInterpolation();
   void restrictedLinearInterpolation(ComputationMap, int);
-  void completeheterogeneousInterpolation(); 
+  void completeheterogeneousInterpolation();
   void printCompCostMatrices();
   /// Compute the earliest start time for a specific (task, rank) pair.
   ///
@@ -227,8 +235,7 @@ private:
   /// \param B the successor task
   ///
   /// \returns the average communication cost from A -> B
-  double computeAvgCommCost(const kmp_node_info &A,
-                            const kmp_node_info &B);
+  double computeAvgCommCost(const kmp_node_info &A, const kmp_node_info &B);
 
   /// Estimate the average computation cost of a task.
   ///
@@ -282,9 +289,9 @@ private:
   /// Using heterogeneous Interpolation
   bool heterogeneousInterpolation = 0;
   kmp_int32 deviceTypeNumber = 1;
-  std::unordered_map<int,int> deviceTypeMap;
+  std::unordered_map<int, int> deviceTypeMap;
   std::vector<int> device_restricted_map;
-  std::unordered_map<int,std::vector<int>> restricted_to_device_map;
+  std::unordered_map<int, std::vector<int>> restricted_to_device_map;
   std::vector<ComputationMap> device_restricted_CompCost;
   kmp_int32 maxIteration = 100;
 };
@@ -314,7 +321,7 @@ private:
 
   /// Do nothing.
   void preScheduleTask(kmp_int32 task_id, kmp_int32) override {}
-  
+
   void resetWeight() override;
 
 public:

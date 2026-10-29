@@ -339,7 +339,6 @@ void handleTargetOutcome(bool Success, ident_t *Loc) {
         for (auto &Device : PM->devices(ExclusiveDevicesAccessor))
           dumpTargetPointerMappings(Loc, Device);
       }
-
     }
     break;
   }

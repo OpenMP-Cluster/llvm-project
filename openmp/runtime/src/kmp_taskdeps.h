@@ -97,8 +97,6 @@ extern void __kmpc_give_task(kmp_task_t *ptask, kmp_int32 start);
 
 static inline void __kmp_release_deps(kmp_int32 gtid, kmp_taskdata_t *task) {
 
-
-
 #if OMPX_TASKGRAPH
   if (task->is_taskgraph && !(__kmp_tdg_is_recording(task->tdg->tdg_status))) {
     kmp_node_info_t *TaskInfo = &(task->tdg->record_map[task->td_tdg_task_id]);
@@ -183,10 +181,9 @@ static inline void __kmp_release_deps(kmp_int32 gtid, kmp_taskdata_t *task) {
             __kmp_dmdas_owns_task(successor_task)) {
           __kmp_dmdas_native_ready(successor_task);
         } else {
-          KA_TRACE(20,
-                   ("__kmp_release_deps: T#%d successor %p of %p scheduled "
-                    "for execution.\n",
-                    gtid, successor_task, task));
+          KA_TRACE(20, ("__kmp_release_deps: T#%d successor %p of %p scheduled "
+                        "for execution.\n",
+                        gtid, successor_task, task));
 
           // If a regular task depends on a hidden helper task, execute it on
           // its encountering team.

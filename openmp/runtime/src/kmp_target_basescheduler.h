@@ -31,9 +31,12 @@
 
 #define KMP_TASKNODE_TO_TASKID(Task) KMP_TASK_TO_TASKDATA(Task.task)->td_task_id
 #define KMP_TASKPTR_TO_TASKID(Task) KMP_TASK_TO_TASKDATA(Task->task)->td_task_id
-#define KMP_TASKNODE_TO_TDG_TASKID(Task) KMP_TASK_TO_TASKDATA(Task.task)->td_tdg_task_id
-#define KMP_TASKPTR_TO_TDG_TASKID(Task) KMP_TASK_TO_TASKDATA(Task->task)->td_tdg_task_id
-#define KMP_TDG_TASKID_TO_TASKID(tdg,tdg_task_id) KMP_TASKNODE_TO_TASKID(tdg->record_map[tdg_task_id])
+#define KMP_TASKNODE_TO_TDG_TASKID(Task)                                       \
+  KMP_TASK_TO_TASKDATA(Task.task)->td_tdg_task_id
+#define KMP_TASKPTR_TO_TDG_TASKID(Task)                                        \
+  KMP_TASK_TO_TASKDATA(Task->task)->td_tdg_task_id
+#define KMP_TDG_TASKID_TO_TASKID(tdg, tdg_task_id)                             \
+  KMP_TASKNODE_TO_TASKID(tdg->record_map[tdg_task_id])
 
 enum class NonTaskScheduler {
   STATIC, // Default strategy
@@ -76,15 +79,16 @@ public:
   BaseScheduler();
   virtual ~BaseScheduler();
 
-  void acquireAndScheduleGraph(kmp_tdg_info_t* tdg);
-  void acquireAndScheduleGraphRR(kmp_tdg_info_t* tdg, kmp_int32 offset);
+  void acquireAndScheduleGraph(kmp_tdg_info_t *tdg);
+  void acquireAndScheduleGraphRR(kmp_tdg_info_t *tdg, kmp_int32 offset);
   void acquireGraphOnly(kmp_tdg_info_t *tdg);
   kmp_int32 scheduleTask(kmp_int32 task_id);
   kmp_int32 get_scheduleTask(kmp_int32 task_id);
   void pinTask(kmp_int32 task_id, kmp_int32 DeviceId);
   void setTaskState(kmp_int32 task_id, TaskState new_state);
-  void setTaskState(kmp_int32 task_id, kmp_int32 device_id, TaskState new_state);
-  //void setTaskSourceLocation(int32_t task_id, ident_t *loc);
+  void setTaskState(kmp_int32 task_id, kmp_int32 device_id,
+                    TaskState new_state);
+  // void setTaskSourceLocation(int32_t task_id, ident_t *loc);
 
   bool areTargetTaskRemaining() { return remaining_target_tasks > 0; }
   kmp_target_dep getDep(kmp_int32 task_id, kmp_int64 addr);
@@ -94,7 +98,7 @@ public:
   void setIsScheduleDone(bool state);
   void setSchedulingThread(kmp_int32 gtid);
   void resetSchedulingThread();
-  bool isSchedulingThread(kmp_int32 gtid); 
+  bool isSchedulingThread(kmp_int32 gtid);
   void resetTasksState();
   void resetMemoryTasks();
   void resetTasksRank();
@@ -106,7 +110,7 @@ public:
 
 private:
   /// Replace the current task graph with the newest one from OpenMP runtime.
-  void acquireNewGraph(kmp_tdg_info_t* tdg);
+  void acquireNewGraph(kmp_tdg_info_t *tdg);
 
 public:
   /// Dump the task graph to a graphviz "dot" file.
@@ -137,13 +141,13 @@ public:
   };
 };
 
-using TaskPtr= const kmp_node_info*;
+using TaskPtr = const kmp_node_info *;
 
 namespace detail {
 
 /// Return a string indicating which color an edge should be in the task graph
 /// dump.
-static inline const char *getEdgeColor(kmp_int32 Rank1,kmp_int32 Rank2) {
+static inline const char *getEdgeColor(kmp_int32 Rank1, kmp_int32 Rank2) {
   if (Rank1 == -1 || Rank2 == -1)
     return "black";
   if (Rank1 == Rank2)

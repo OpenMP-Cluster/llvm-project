@@ -13,7 +13,8 @@
 
 #include "kmp_target_roundrobin.h"
 
-void RoundRobinScheduler::preScheduleTask(kmp_int32 task_id, kmp_int32 NumDevices) {
+void RoundRobinScheduler::preScheduleTask(kmp_int32 task_id,
+                                          kmp_int32 NumDevices) {
 
   assert((*get_schedule_map(tdg->tdg_id)).count(task_id) == 1);
   auto &schedule_data = (*get_schedule_map(tdg->tdg_id))[task_id];
@@ -27,9 +28,7 @@ void RoundRobinScheduler::preScheduleTask(kmp_int32 task_id, kmp_int32 NumDevice
   // better performance this way (we cannot predict where the data is actually
   // going to be used with round-robin strategy).
   schedule_data.rank =
-      isTargetDataTask(task)
-          ? 1
-          : (task_counter++ % NumDevices) + 1;
+      isTargetDataTask(task) ? 1 : (task_counter++ % NumDevices) + 1;
 }
 void RoundRobinScheduler::scheduleGraph() {
   const kmp_int32 num_devices = __kmpc_get_num_devices();

@@ -80,8 +80,7 @@ struct __tgt_async_info {
   /// happening.
   KernelLaunchEnvironmentTy KernelLaunchEnvironment;
 
-    double KernelExecutionTime = 0.0;
-
+  double KernelExecutionTime = 0.0;
 };
 
 /// This struct contains all of the arguments to a target kernel region launch.
@@ -129,7 +128,7 @@ enum DeviceType {
   UNKNOWN_DEVICE = 0,
   CPU_DEVICE,
   CUDA_DEVICE, // NVIDIA GPUs
-  HSA_DEVICE, // AMD GPUs
+  HSA_DEVICE,  // AMD GPUs
 };
 }
 

@@ -222,14 +222,9 @@ EXTERN int omp_target_memcpy(void *Dst, const void *Src, size_t Length,
   void *SrcAddr = (char *)const_cast<void *>(Src) + SrcOffset;
   void *DstAddr = (char *)Dst + DstOffset;
 
+  int InitialDevice = omp_get_initial_device();
 
-
-int InitialDevice = omp_get_initial_device();
-
-
-
-if (SrcDevice == InitialDevice &&
-    DstDevice == InitialDevice) {
+  if (SrcDevice == InitialDevice && DstDevice == InitialDevice) {
     DP("copy from host to host\n");
     const void *P = memcpy(DstAddr, SrcAddr, Length);
     if (P == NULL)
@@ -271,29 +266,19 @@ if (SrcDevice == InitialDevice &&
         return OFFLOAD_SUCCESS;
     }
 
-
-
     void *Buffer = malloc(Length);
-
 
     {
       AsyncInfoTy AsyncInfo(*SrcDeviceOrErr);
       Rc = SrcDeviceOrErr->retrieveData(Buffer, SrcAddr, Length, AsyncInfo);
     }
 
-
-
-
     if (Rc == OFFLOAD_SUCCESS) {
 
       AsyncInfoTy AsyncInfo(*DstDeviceOrErr);
       Rc = DstDeviceOrErr->submitData(DstAddr, Buffer, Length, AsyncInfo);
-
-
     }
     free(Buffer);
-
-
   }
 
   DP("omp_target_memcpy returns %d\n", Rc);

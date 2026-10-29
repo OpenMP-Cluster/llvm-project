@@ -1,5 +1,3 @@
-#include <map>
-#include <tuple>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -7,10 +5,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <tuple>
-#include <chrono>
 
 #include "EventSystem.h"
 #include "RemotePluginManager.h"
@@ -52,11 +50,9 @@ struct AsyncInfoHandle {
   std::unique_ptr<__tgt_async_info> AsyncInfoPtr;
   std::mutex AsyncInfoMutex;
 
-   // DMDAS profiling
+  // DMDAS profiling
   std::deque<std::chrono::steady_clock::time_point> KernelLaunchTimes;
   std::deque<double> KernelExecutionTimes;
-
-
 
   AsyncInfoHandle() { AsyncInfoPtr = std::make_unique<__tgt_async_info>(); }
   AsyncInfoHandle(AsyncInfoHandle &&Other) {
@@ -94,8 +90,8 @@ struct ProxyDevice {
     }
   }
 
-  AsyncInfoHandle *MapAsyncInfo(void *HostAsyncInfoPtr,
-                                int32_t PluginId, int32_t DeviceId) {
+  AsyncInfoHandle *MapAsyncInfo(void *HostAsyncInfoPtr, int32_t PluginId,
+                                int32_t DeviceId) {
     const std::lock_guard<std::mutex> Lock(TableMutex);
 
     auto Key = std::make_tuple(HostAsyncInfoPtr, PluginId, DeviceId);
@@ -113,7 +109,8 @@ struct ProxyDevice {
 
   EventTy waitAsyncOpEnd(int32_t PluginId, int32_t DeviceId,
                          void *AsyncInfoPtr) {
-    auto *TgtAsyncInfo = MapAsyncInfo(AsyncInfoPtr, PluginId, DeviceId)->AsyncInfoPtr.get();
+    auto *TgtAsyncInfo =
+        MapAsyncInfo(AsyncInfoPtr, PluginId, DeviceId)->AsyncInfoPtr.get();
     auto *RPCServer =
         PluginManager.Plugins[PluginId]->getDevice(DeviceId).getRPCServer();
 
@@ -447,7 +444,6 @@ struct ProxyDevice {
     int64_t Size;
     int DstRank;
 
-
     // Save head node rank
     int HeadNodeRank = RequestManager.OtherRank;
 
@@ -456,26 +452,17 @@ struct ProxyDevice {
     RequestManager.receive(&DstRank, 1, MPI_INT);
     RequestManager.receive(&HstAsyncInfoPtr, sizeof(void *), MPI_BYTE);
 
-
-
     if (auto Error = co_await RequestManager; Error)
       co_return Error;
-
-
 
     int32_t PluginId, DeviceId;
 
     std::tie(PluginId, DeviceId) =
         EventSystem.mapDeviceId(RequestManager.DeviceId);
 
-
-
-
     PluginDataHandle DataHandler(&PluginManager, PluginId, DeviceId, Size);
 
     auto *TgtAsyncInfo = MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
-
-
 
     {
       std::lock_guard<std::mutex> Lock(TgtAsyncInfo->AsyncInfoMutex);
@@ -484,35 +471,22 @@ struct ProxyDevice {
           TgtAsyncInfo->AsyncInfoPtr.get());
     }
 
-
-
     if (auto Error =
             co_await waitAsyncOpEnd(PluginId, DeviceId, HstAsyncInfoPtr);
         Error)
       co_return Error;
 
-
-
     // Set the Destination Rank in RequestManager
     RequestManager.OtherRank = DstRank;
-
-
 
     // Send buffer to target device
     RequestManager.sendInBatchs(DataHandler.HstPtr, Size);
 
-
-
     if (auto Error = co_await RequestManager; Error)
       co_return Error;
 
-
-
-
     // Set the HeadNode Rank to send the final notificatin
     RequestManager.OtherRank = HeadNodeRank;
-
-
 
     // Event completion notification
     RequestManager.send(nullptr, 0, MPI_BYTE);
@@ -526,49 +500,31 @@ struct ProxyDevice {
     // Save head node rank
     int SrcRank, HeadNodeRank = RequestManager.OtherRank;
 
-
-
     RequestManager.receive(&DstBuffer, sizeof(void *), MPI_BYTE);
     RequestManager.receive(&Size, 1, MPI_INT64_T);
     RequestManager.receive(&SrcRank, 1, MPI_INT);
     RequestManager.receive(&HstAsyncInfoPtr, sizeof(void *), MPI_BYTE);
 
-
-
     if (auto Error = co_await RequestManager; Error)
       co_return Error;
-
-
-
 
     int32_t PluginId, DeviceId;
 
     std::tie(PluginId, DeviceId) =
         EventSystem.mapDeviceId(RequestManager.DeviceId);
 
-
     PluginDataHandle DataHandler(&PluginManager, PluginId, DeviceId, Size);
 
     // Set the Source Rank in RequestManager
     RequestManager.OtherRank = SrcRank;
 
-
-
-
     // Receive buffer from the Source device
     RequestManager.receiveInBatchs(DataHandler.HstPtr, Size);
-
-
 
     if (auto Error = co_await RequestManager; Error)
       co_return Error;
 
-
-
-
     auto *TgtAsyncInfo = MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
-
-
 
     {
       std::lock_guard<std::mutex> Lock(TgtAsyncInfo->AsyncInfoMutex);
@@ -577,22 +533,16 @@ struct ProxyDevice {
           TgtAsyncInfo->AsyncInfoPtr.get());
     }
 
-
-
     if (auto Error =
             co_await waitAsyncOpEnd(PluginId, DeviceId, HstAsyncInfoPtr);
         Error)
       co_return Error;
-
-
 
     // Set the HeadNode Rank to send the final notificatin
     RequestManager.OtherRank = HeadNodeRank;
 
     // Event completion notification
     RequestManager.send(nullptr, 0, MPI_BYTE);
-
-
 
     co_return (co_await RequestManager);
   }
@@ -647,20 +597,12 @@ struct ProxyDevice {
       fflush(stdout);*/
 
       PluginManager.Plugins[PluginId]->launch_kernel(
-          DeviceId,
-          TgtEntryPtr,
-          TgtArgs.data(),
-          TgtOffsets.data(),
-          &KernelArgs,
+          DeviceId, TgtEntryPtr, TgtArgs.data(), TgtOffsets.data(), &KernelArgs,
           TgtAsyncInfo);
-
     }
 
     // Event completion notification.
-    RequestManager.send(
-        nullptr,
-        0,
-        MPI_BYTE);
+    RequestManager.send(nullptr, 0, MPI_BYTE);
 
     co_return (co_await RequestManager);
   }
@@ -823,16 +765,13 @@ struct ProxyDevice {
       REPORT("Synchronize event failed with msg: %s\n",
              toString(std::move(Error)).data());
 
-    double KernelTime =
-        finishKernelTiming(HstAsyncInfoPtr, PluginId, DeviceId);
+    double KernelTime = finishKernelTiming(HstAsyncInfoPtr, PluginId, DeviceId);
 
     /*printf(
         "REAL ASYNC KERNEL TIME path=synchronize async=%p time=%.9f\n",
         HstAsyncInfoPtr,
         KernelTime);
     fflush(stdout);*/
-
-
 
     /*RequestManager.send(
         &KernelTime,
@@ -893,27 +832,22 @@ struct ProxyDevice {
     co_return (co_await RequestManager);
   }
 
-  double finishKernelTiming(void *HstAsyncInfoPtr,
-                            int32_t PluginId, int32_t DeviceId) {
-    auto *AsyncHandle =
-        MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
+  double finishKernelTiming(void *HstAsyncInfoPtr, int32_t PluginId,
+                            int32_t DeviceId) {
+    auto *AsyncHandle = MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
 
-    std::lock_guard<std::mutex> Lock(
-        AsyncHandle->AsyncInfoMutex);
+    std::lock_guard<std::mutex> Lock(AsyncHandle->AsyncInfoMutex);
 
     if (AsyncHandle->KernelLaunchTimes.empty())
       return 0.0;
 
-    auto KernelStart =
-        AsyncHandle->KernelLaunchTimes.front();
+    auto KernelStart = AsyncHandle->KernelLaunchTimes.front();
 
     AsyncHandle->KernelLaunchTimes.pop_front();
 
-    auto KernelEnd =
-        std::chrono::steady_clock::now();
+    auto KernelEnd = std::chrono::steady_clock::now();
 
-    return std::chrono::duration<double>(
-        KernelEnd - KernelStart).count();
+    return std::chrono::duration<double>(KernelEnd - KernelStart).count();
   }
 
   EventTy queryAsync(MPIRequestManagerTy RequestManager) {
@@ -937,22 +871,18 @@ struct ProxyDevice {
 
     double KernelTime = 0.0;
 
-    auto *AsyncHandle =
-        MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
+    auto *AsyncHandle = MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
 
     {
-      std::lock_guard<std::mutex> Lock(
-          AsyncHandle->AsyncInfoMutex);
+      std::lock_guard<std::mutex> Lock(AsyncHandle->AsyncInfoMutex);
 
-      auto *TgtAsyncInfo =
-          AsyncHandle->AsyncInfoPtr.get();
+      auto *TgtAsyncInfo = AsyncHandle->AsyncInfoPtr.get();
 
       // query_async() inside waitAsyncOpEnd() has completed the
       // backend operation. CUDA collectKernelTiming() therefore
       // has populated KernelExecutionTime with the device-side
       // elapsed kernel time.
-      KernelTime =
-          TgtAsyncInfo->KernelExecutionTime;
+      KernelTime = TgtAsyncInfo->KernelExecutionTime;
 
       // Consume the measurement exactly once.
       TgtAsyncInfo->KernelExecutionTime = 0.0;
@@ -962,16 +892,10 @@ struct ProxyDevice {
         AsyncHandle->KernelLaunchTimes.pop_front();
     }
 
-    RequestManager.send(
-        &KernelTime,
-        1,
-        MPI_DOUBLE);
+    RequestManager.send(&KernelTime, 1, MPI_DOUBLE);
 
     // Event completion notification
-    RequestManager.send(
-        nullptr,
-        0,
-        MPI_BYTE);
+    RequestManager.send(nullptr, 0, MPI_BYTE);
 
     co_return (co_await RequestManager);
   }

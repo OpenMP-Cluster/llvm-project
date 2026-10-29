@@ -926,7 +926,6 @@ struct MPIPluginTy : public GenericPluginTy {
       return OFFLOAD_FAIL;
     }
 
-
     // Queue->push_back(Event);
 
     return OFFLOAD_SUCCESS;
@@ -961,7 +960,6 @@ struct MPIPluginTy : public GenericPluginTy {
              DeviceId, toString(std::move(Err)).data());
       return OFFLOAD_FAIL;
     }
-
 
     // Queue->push_back(Event);
 
@@ -1002,12 +1000,10 @@ struct MPIPluginTy : public GenericPluginTy {
       return OFFLOAD_FAIL;
     }
 
-
     Event.wait();
 
     if (auto Err = Event.getError()) {
-      REPORT("Failure on event\n",
-              toString(std::move(Err)).data());
+      REPORT("Failure on event\n", toString(std::move(Err)).data());
       return OFFLOAD_FAIL;
     }
 
@@ -1069,8 +1065,8 @@ struct MPIPluginTy : public GenericPluginTy {
         reinterpret_cast<MPIEventQueuePtr>(AsyncInfoPtr->Queue);
 
     // EventTy Event = EventSystem.createEvent(OriginEvents::synchronize,
-    //                                         EventTypeTy::SYNCHRONIZE, DeviceId,
-    //                                         AsyncInfoPtr);
+    //                                         EventTypeTy::SYNCHRONIZE,
+    //                                         DeviceId, AsyncInfoPtr);
 
     // if (Event.empty()) {
     //   REPORT("Failed to create synchronize event on device %d\n", DeviceId);
@@ -1130,49 +1126,39 @@ struct MPIPluginTy : public GenericPluginTy {
     return OFFLOAD_SUCCESS;
   }
 
-  int32_t query_async(
-    int32_t DeviceId,
-    __tgt_async_info *AsyncInfoPtr) override
-{
-    auto *Queue =
-        reinterpret_cast<MPIEventQueue *>(AsyncInfoPtr->Queue);
+  int32_t query_async(int32_t DeviceId,
+                      __tgt_async_info *AsyncInfoPtr) override {
+    auto *Queue = reinterpret_cast<MPIEventQueue *>(AsyncInfoPtr->Queue);
 
-    EventTy Event =
-        EventSystem.createEvent(
-            OriginEvents::queryAsync,
-            EventTypeTy::QUERY_ASYNC,
-            DeviceId,
-            AsyncInfoPtr);
+    EventTy Event = EventSystem.createEvent(OriginEvents::queryAsync,
+                                            EventTypeTy::QUERY_ASYNC, DeviceId,
+                                            AsyncInfoPtr);
 
     if (Event.empty()) {
-        REPORT(
-            "Failed to create query_async event "
-            "on device %d\n",
-            DeviceId);
-        return OFFLOAD_FAIL;
+      REPORT("Failed to create query_async event "
+             "on device %d\n",
+             DeviceId);
+      return OFFLOAD_FAIL;
     }
 
     Event.wait();
 
     if (auto Error = Event.getError()) {
-        REPORT(
-            "Failure to query_async on device %d: %s\n",
-            DeviceId,
-            toString(std::move(Error)).data());
-        return OFFLOAD_FAIL;
+      REPORT("Failure to query_async on device %d: %s\n", DeviceId,
+             toString(std::move(Error)).data());
+      return OFFLOAD_FAIL;
     }
 
     AsyncInfoPtr->Queue = nullptr;
 
     if (auto Error = returnQueue(Queue)) {
-        REPORT(
-            "Failed to return async Queue: %s\n",
-            toString(std::move(Error)).c_str());
-        return OFFLOAD_FAIL;
+      REPORT("Failed to return async Queue: %s\n",
+             toString(std::move(Error)).c_str());
+      return OFFLOAD_FAIL;
     }
 
     return OFFLOAD_SUCCESS;
-}
+  }
 
   /*int32_t query_async(int32_t DeviceId,
                       __tgt_async_info *AsyncInfoPtr) override {
@@ -1214,7 +1200,8 @@ struct MPIPluginTy : public GenericPluginTy {
     // // deallocating the host queue, preventing the device queue
     // // from holding resources unnecessarily.
     // EventTy Event = EventSystem.createEvent(OriginEvents::queryAsync,
-    //                                         EventTypeTy::QUERY_ASYNC, DeviceId,
+    //                                         EventTypeTy::QUERY_ASYNC,
+  DeviceId,
     //                                         AsyncInfoPtr);
 
     // if (Event.empty()) {

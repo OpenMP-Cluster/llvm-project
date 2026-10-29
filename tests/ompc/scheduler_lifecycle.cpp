@@ -24,8 +24,7 @@ int main(int argc, char **argv) {
   const std::string scheduler = argv[1];
   const bool legacy = scheduler == "heft_legacy";
 
-  if (!legacy && scheduler != "roundrobin" &&
-      scheduler != "graph_roundrobin") {
+  if (!legacy && scheduler != "roundrobin" && scheduler != "graph_roundrobin") {
     std::fprintf(stderr, "Unsupported scheduler: %s\n", argv[1]);
     return 1;
   }
@@ -66,9 +65,8 @@ int main(int argc, char **argv) {
         return 3;
       }
 
-      const std::string content(
-          (std::istreambuf_iterator<char>(file)),
-          std::istreambuf_iterator<char>());
+      const std::string content((std::istreambuf_iterator<char>(file)),
+                                std::istreambuf_iterator<char>());
 
       if (content.find("digraph TargetTaskGraph") == std::string::npos) {
         std::fprintf(stderr, "Invalid DOT file: %s\n", path.c_str());

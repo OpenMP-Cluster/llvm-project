@@ -10,10 +10,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <deque>
 #include <cassert>
 #include <cstddef>
 #include <cuda.h>
+#include <deque>
 #include <string>
 #include <unordered_map>
 
@@ -555,7 +555,8 @@ struct CUDADeviceTy : public GenericDeviceTy {
     }
 
     CUresult Res = cuEventRecord(Timing.Start, Stream);
-    if (auto Err = Plugin::check(Res, "error recording kernel start event: %s")) {
+    if (auto Err =
+            Plugin::check(Res, "error recording kernel start event: %s")) {
       CUDAEventManager.returnResource(Timing.Start);
       CUDAEventManager.returnResource(Timing.Stop);
       return Err;
@@ -570,11 +571,9 @@ struct CUDADeviceTy : public GenericDeviceTy {
     if (It == KernelTimings.end() || It->second.empty())
       return Plugin::success();
 
-    CUresult Res =
-        cuEventRecord(It->second.back().Stop, Stream);
+    CUresult Res = cuEventRecord(It->second.back().Stop, Stream);
 
-    return Plugin::check(
-        Res, "error recording kernel stop event: %s");
+    return Plugin::check(Res, "error recording kernel stop event: %s");
   }
 
   Error collectKernelTiming(CUstream Stream, __tgt_async_info &AsyncInfo) {
@@ -588,25 +587,18 @@ struct CUDADeviceTy : public GenericDeviceTy {
       float Milliseconds = 0.0f;
 
       CUresult Res =
-          cuEventElapsedTime(
-              &Milliseconds,
-              Timing.Start,
-              Timing.Stop);
-
-      if (auto Err = Plugin::check(
-              Res,
-              "error measuring kernel execution time: %s"))
-        return Err;
-
-      TotalSeconds +=
-          static_cast<double>(Milliseconds) / 1000.0;
+          cuEventElapsedTime(&Milliseconds, Timing.Start, Timing.Stop);
 
       if (auto Err =
-              CUDAEventManager.returnResource(Timing.Start))
+              Plugin::check(Res, "error measuring kernel execution time: %s"))
         return Err;
 
-      if (auto Err =
-              CUDAEventManager.returnResource(Timing.Stop))
+      TotalSeconds += static_cast<double>(Milliseconds) / 1000.0;
+
+      if (auto Err = CUDAEventManager.returnResource(Timing.Start))
+        return Err;
+
+      if (auto Err = CUDAEventManager.returnResource(Timing.Stop))
         return Err;
     }
 
