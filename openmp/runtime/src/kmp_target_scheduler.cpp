@@ -30,10 +30,7 @@ kmp_int32 __kmpc_get_num_devices(){
 // variable.
 // NOTE: Update this when adding a new scheduler.
 static const char *allowed_schedulers[] = {
-    "roundrobin",
-    "graph_roundrobin",
-    "heft",
-    "heft_legacy",
+    "dmdas", "roundrobin", "graph_roundrobin", "heft", "heft_legacy",
 };
 
 // Scheduler global state
@@ -87,7 +84,7 @@ void __kmpc_InitScheduler() {
   } else if (sched_str == "graph_roundrobin") {
     KG_TRACE(10,("[SCHEDULER] Creating static round-robin scheduler\n"));
     scheduler = new GraphRoundRobinScheduler();
-  } else if (sched_str == "heft") {
+  } else if (sched_str == "heft" || sched_str == "dmdas") {
     KG_TRACE(10,("[SCHEDULER] Creating HEFT scheduler\n"));
     scheduler = new HEFTScheduler();
   } else if (sched_str == "heft_legacy") {

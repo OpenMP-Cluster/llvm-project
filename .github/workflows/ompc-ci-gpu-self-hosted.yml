@@ -83,15 +83,11 @@ jobs:
             local log="${name}.log"
             local rc=0
 
-            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_SCHEDULER
             unset OMPCLUSTER_INITIAL_SCHEDULE_POLICY
             unset OMPCLUSTER_INITIAL_ITERATION_NUMBER
 
-            if [[ "$scheduler" == "dmdas" ]]; then
-              export OMPCLUSTER_RUNTIME=dmdas
-            else
-              export OMPCLUSTER_SCHEDULER="$scheduler"
-            fi
+            export OMPCLUSTER_SCHEDULER="$scheduler"
 
             export KMP_MAX_TDGS="$tdg"
 

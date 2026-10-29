@@ -2537,11 +2537,9 @@ void __kmp_dmdas_init(int /*nworkers*/)
 
 bool __kmp_use_dmdas_runtime()
 {
-    const char *env = getenv("OMPCLUSTER_RUNTIME");
+  const char *env = getenv("OMPCLUSTER_SCHEDULER");
 
-
-
-    return env && strcmp(env, "dmdas") == 0;
+  return env && strcmp(env, "dmdas") == 0;
 }
 
 static void save_and_freeze_perf_model_locked()

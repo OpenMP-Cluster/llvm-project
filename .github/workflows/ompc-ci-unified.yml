@@ -104,7 +104,7 @@ jobs:
 
             echo "=== $name ==="
 
-            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_SCHEDULER
             unset OMPCLUSTER_PERF_MODEL_DIR
             unset OMPCLUSTER_PERF_MODEL_TRAINING
             unset OMPCLUSTER_PERF_SAMPLES
@@ -121,11 +121,7 @@ jobs:
             unset OMPCLUSTER_INTERPOLATION_TYPE
             export OMPCLUSTER_TASKBENCH_ITERATION_NUMBER=1
 
-            if [[ "$scheduler" == "dmdas" ]]; then
-              export OMPCLUSTER_RUNTIME=dmdas
-            else
-              export OMPCLUSTER_SCHEDULER="$scheduler"
-            fi
+            export OMPCLUSTER_SCHEDULER="$scheduler"
 
             if [[ "$name" == "dmdas-rescheduling" ]]; then
               export OMPCLUSTER_INITIAL_SCHEDULE_POLICY=0
@@ -295,7 +291,7 @@ jobs:
           run_coverage() {
             local name="$1" scheduler="$2" binary="$3" dmdas_config="${4:-}"
 
-            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_SCHEDULER
             unset OMPCLUSTER_PERF_MODEL_DIR OMPCLUSTER_PERF_MODEL_TRAINING OMPCLUSTER_PERF_SAMPLES
             unset OMPCLUSTER_DMDAS_FORCE_WORKER OMPCLUSTER_DMDAS_NON_TARGET_COST OMPCLUSTER_DMDAS_BANDWIDTH
             unset OMPCLUSTER_DMDAS_PLACEMENT_DEBUG
@@ -309,11 +305,7 @@ jobs:
             unset OMPCLUSTER_INTERPOLATION_TYPE
             export OMPCLUSTER_TASKBENCH_ITERATION_NUMBER=1
 
-            if [[ "$scheduler" == "dmdas" ]]; then
-              export OMPCLUSTER_RUNTIME=dmdas
-            else
-              export OMPCLUSTER_SCHEDULER="$scheduler"
-            fi
+            export OMPCLUSTER_SCHEDULER="$scheduler"
 
             export LLVM_PROFILE_FILE="$GITHUB_WORKSPACE/coverage-data/${name}-%p.profraw"
 
@@ -659,15 +651,11 @@ jobs:
             local log="${name}.log"
             local rc=0
 
-            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_SCHEDULER
             unset OMPCLUSTER_INITIAL_SCHEDULE_POLICY
             unset OMPCLUSTER_INITIAL_ITERATION_NUMBER
 
-            if [[ "$scheduler" == "dmdas" ]]; then
-              export OMPCLUSTER_RUNTIME=dmdas
-            else
-              export OMPCLUSTER_SCHEDULER="$scheduler"
-            fi
+            export OMPCLUSTER_SCHEDULER="$scheduler"
 
             export KMP_MAX_TDGS="$tdg"
 
@@ -744,15 +732,11 @@ jobs:
 
             mkdir -p "$dir"
 
-            unset OMPCLUSTER_RUNTIME OMPCLUSTER_SCHEDULER
+            unset OMPCLUSTER_SCHEDULER
             unset OMPCLUSTER_INITIAL_SCHEDULE_POLICY
             unset OMPCLUSTER_INITIAL_ITERATION_NUMBER
 
-            if [[ "$scheduler" == dmdas ]]; then
-              export OMPCLUSTER_RUNTIME=dmdas
-            else
-              export OMPCLUSTER_SCHEDULER="$scheduler"
-            fi
+            export OMPCLUSTER_SCHEDULER="$scheduler"
 
             export KMP_MAX_TDGS="$tdg"
             export LLVM_PROFILE_FILE="$dir/gpu-%p-%m.profraw"
@@ -790,7 +774,6 @@ jobs:
           mkdir -p "$HEFT_DIR"
 
           export OMPCLUSTER_SCHEDULER=heft
-          unset OMPCLUSTER_RUNTIME
           export OMPCLUSTER_INITIAL_SCHEDULE_POLICY=1
           export OMPCLUSTER_INITIAL_ITERATION_NUMBER=1
           export OMPCLUSTER_RESCHEDULING_INTERVAL=1
