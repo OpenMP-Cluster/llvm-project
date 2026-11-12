@@ -22,6 +22,10 @@
 #include <string>
 #include <cstdlib>
 #include <dlfcn.h>
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 struct RuntimeWorker;
 struct RuntimeNode;
@@ -734,27 +738,14 @@ static uintptr_t get_stable_model_id(void *outlined_fn_id) {
   return offset;
 }
 
-static std::string get_perf_model_path() {
+static std::string get_perf_model_dir() {
   const char *dir = getenv("OMPCLUSTER_PERF_MODEL_DIR");
-
-  if (dir == nullptr || dir[0] == '\0')
-    return "";
-
-  return std::string(dir) + "/perf_models.dat";
+  return dir != nullptr ? std::string(dir) : "";
 }
 
-static std::string get_perf_sample_path() {
+static bool perf_samples_enabled() {
   const char *enabled = getenv("OMPCLUSTER_PERF_SAMPLES");
-
-  if (enabled == nullptr || enabled[0] == '\0' || strcmp(enabled, "1") != 0)
-    return "";
-
-  const char *dir = getenv("OMPCLUSTER_PERF_MODEL_DIR");
-
-  if (dir == nullptr || dir[0] == '\0')
-    return "";
-
-  return std::string(dir) + "/perf_samples.dat";
+  return enabled != nullptr && strcmp(enabled, "1") == 0;
 }
 
 void __kmpc_dmdas_target_dispatched(int32_t task_id) {
@@ -800,16 +791,108 @@ static std::vector<double> get_feature_values(const PerfFeatures &features) {
   return values;
 }
 
+// The configured directory and its ancestors must be trusted.
+// File names are fixed, and symlinks at the final component are rejected.
+static int open_perf_directory(const char *dir) {
+  if (dir == nullptr || dir[0] == '\0')
+    return -1;
+
+  int fd = open(dir, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  if (fd < 0)
+    return -1;
+
+  struct stat st;
+  if (fstat(fd, &st) != 0 || !S_ISDIR(st.st_mode)) {
+    close(fd);
+    return -1;
+  }
+
+  return fd;
+}
+
+static int open_perf_file(int dirfd, const char *filename, int flags) {
+  int fd = openat(dirfd, filename, flags | O_CLOEXEC | O_NOFOLLOW, 0600);
+  if (fd < 0)
+    return -1;
+
+  struct stat st;
+  if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+    close(fd);
+    return -1;
+  }
+
+  return fd;
+}
+
+static bool write_perf_file(const char *dir, const char *filename,
+                            const std::string &data, bool append) {
+  int dirfd = open_perf_directory(dir);
+  if (dirfd < 0)
+    return false;
+
+  int flags = O_WRONLY | O_CREAT | (append ? O_APPEND : 0);
+  int fd = open_perf_file(dirfd, filename, flags);
+  close(dirfd);
+
+  if (fd < 0)
+    return false;
+
+  if (!append && ftruncate(fd, 0) != 0) {
+    close(fd);
+    return false;
+  }
+
+  const char *ptr = data.data();
+  size_t remaining = data.size();
+
+  while (remaining != 0) {
+    ssize_t n = write(fd, ptr, remaining);
+    if (n < 0 && errno == EINTR)
+      continue;
+    if (n <= 0) {
+      close(fd);
+      return false;
+    }
+    ptr += n;
+    remaining -= static_cast<size_t>(n);
+  }
+
+  return close(fd) == 0;
+}
+
+static bool read_perf_file(const char *dir, std::string &contents) {
+  int dirfd = open_perf_directory(dir);
+  if (dirfd < 0)
+    return false;
+
+  int fd = open_perf_file(dirfd, "perf_models.dat", O_RDONLY);
+  close(dirfd);
+
+  if (fd < 0)
+    return false;
+
+  char buffer[4096];
+  for (;;) {
+    ssize_t n = read(fd, buffer, sizeof(buffer));
+    if (n < 0 && errno == EINTR)
+      continue;
+    if (n < 0) {
+      close(fd);
+      return false;
+    }
+    if (n == 0)
+      break;
+    contents.append(buffer, static_cast<size_t>(n));
+  }
+
+  return close(fd) == 0;
+}
+
 void PerformanceModel::save(const char *path) {
   if (path == nullptr || path[0] == '\0')
     return;
 
-  std::ofstream file(path);
-
-  if (!file.is_open()) {
-    printf("PERF MODEL: cannot save file %s\n", path);
-    return;
-  }
+  std::ostringstream file;
 
   file << "# OMPC DMDAS multidimensional performance models\n";
   file << "# format:\n";
@@ -855,6 +938,9 @@ void PerformanceModel::save(const char *path) {
 
     file << "\n";
   }
+
+  if (!write_perf_file(path, "perf_models.dat", file.str(), false))
+    fprintf(stderr, "PERF MODEL: cannot save model file\n");
 }
 
 void PerformanceModel::save_sample(const char *path, DMDASTask *task,
@@ -862,12 +948,7 @@ void PerformanceModel::save_sample(const char *path, DMDASTask *task,
   if (path == nullptr || path[0] == '\0')
     return;
 
-  std::ofstream file(path, std::ios::out | std::ios::app);
-
-  if (!file.is_open()) {
-    printf("PERF SAMPLE FILE: cannot open %s\n", path);
-    return;
-  }
+  std::ostringstream file;
 
   /*
    * Format:
@@ -901,18 +982,22 @@ void PerformanceModel::save_sample(const char *path, DMDASTask *task,
   }
 
   file << " " << duration << "\n";
+
+  if (!write_perf_file(path, "perf_samples.dat", file.str(), true))
+    fprintf(stderr, "PERF SAMPLE FILE: cannot save sample\n");
 }
 
 int PerformanceModel::load(const char *path) {
   if (path == nullptr || path[0] == '\0')
     return 0;
 
-  std::ifstream file(path);
-
-  if (!file.is_open()) {
-    printf("PERF MODEL: no existing model file %s\n", path);
+  std::string contents;
+  if (!read_perf_file(path, contents)) {
+    printf("PERF MODEL: no existing model file\n");
     return 0;
   }
+
+  std::istringstream file(contents);
 
   std::string line;
   int loaded = 0;
@@ -1798,10 +1883,10 @@ void PerformanceModel::record_execution(DMDASTask *task, RuntimeWorker *worker,
     models[key].update(features, duration);
   }
 
-  std::string sample_path = get_perf_sample_path();
-
-  if (!sample_path.empty()) {
-    save_sample(sample_path.c_str(), task, worker, duration);
+  if (perf_samples_enabled()) {
+    std::string dir = get_perf_model_dir();
+    if (!dir.empty())
+      save_sample(dir.c_str(), task, worker, duration);
   }
 }
 
@@ -1956,10 +2041,10 @@ void __kmp_dmdas_init(int /*nworkers*/) {
    */
   g_transfer_executor.start(8);
 
-  std::string perf_model_path = get_perf_model_path();
+  std::string perf_model_dir = get_perf_model_dir();
 
-  if (!perf_model_path.empty()) {
-    int loaded = g_perf_model.load(perf_model_path.c_str());
+  if (!perf_model_dir.empty()) {
+    int loaded = g_perf_model.load(perf_model_dir.c_str());
 
     if (loaded > 0) {
       /*
@@ -1995,10 +2080,10 @@ static void save_and_freeze_perf_model_locked() {
   if (was_frozen)
     return;
 
-  std::string perf_model_path = get_perf_model_path();
+  std::string perf_model_dir = get_perf_model_dir();
 
-  if (!perf_model_path.empty()) {
-    g_perf_model.save(perf_model_path.c_str());
+  if (!perf_model_dir.empty()) {
+    g_perf_model.save(perf_model_dir.c_str());
   }
 }
 
@@ -2025,10 +2110,10 @@ void __kmp_dmdas_reset_for_replay() {
        * sufficient statistics, but keep the model trainable so
        * later executions continue updating the same model.
        */
-      std::string perf_model_path = get_perf_model_path();
+      std::string perf_model_dir = get_perf_model_dir();
 
-      if (!perf_model_path.empty()) {
-        g_perf_model.save(perf_model_path.c_str());
+      if (!perf_model_dir.empty()) {
+        g_perf_model.save(perf_model_dir.c_str());
       }
     } else {
       /*

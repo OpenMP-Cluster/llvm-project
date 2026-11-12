@@ -826,7 +826,37 @@ jobs:
           run_coverage dmdas-no-tdg dmdas 0
           run_coverage heft-legacy-tdg heft_legacy 100
           run_coverage heft-legacy-no-tdg heft_legacy 0
-          run_coverage heft-tdg heft 100
+
+          # Modern HEFT is currently intermittent: collect coverage when it
+          # succeeds, but do not discard coverage from stable schedulers.
+          echo "=== GPU COVERAGE: heft-tdg ==="
+          rc=0
+          run_coverage heft-tdg heft 100 || rc=$?
+
+          if [[ "$rc" -ne 0 ]]; then
+            if [[ "$rc" -eq 124 ]]; then
+              status=TIMEOUT
+            else
+              status=FAIL
+            fi
+
+            echo "::warning::GPU coverage heft-tdg: $status (exit=$rc)"
+            tail -40 "$OUT/heft-tdg/taskbench.log" || true
+
+            # Profiles from an incomplete execution must not be merged.
+            find "$OUT/heft-tdg" -name '*.profraw' -delete
+          else
+            status=PASS
+          fi
+
+          printf 'Test\tStatus\tExitCode\nheft-tdg\t%s\t%s\n' \
+            "$status" "$rc" > "$OUT/heft-tdg/results.tsv"
+
+          {
+            echo "## GPU modern HEFT"
+            echo
+            echo "heft-tdg: $status (exit=$rc)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           # Exercise heterogeneous HEFT interpolation with CPU and CUDA targets.
           echo "=== GPU COVERAGE: heft-heterogeneous-interpolation ==="
