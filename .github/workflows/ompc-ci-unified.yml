@@ -585,7 +585,7 @@ jobs:
           make -C task-bench/core -j2 CC=clang CXX=clang++
 
           make -C task-bench/ompcluster -j2 \
-            main_gpu_auto \
+            main_gpu_auto main_taskwait main_taskwait_tdg \
             CXX=clang++ \
             CUDA=1 \
             CUDA_ARCH=sm_120
@@ -695,6 +695,67 @@ jobs:
           run_gpu_test heft-legacy-tdg heft_legacy 100
           run_gpu_test heft-legacy-no-tdg heft_legacy 0
           run_gpu_test heft-tdg heft 100
+
+      - name: Run GPU taskwait regression tests
+        run: |
+          set -euo pipefail
+
+          TC=/home/ompc/tools/llvm/installs/gpu/release
+          export PATH="$TC/bin:$PATH"
+          export LD_LIBRARY_PATH="$TC/lib:$TC/lib/x86_64-unknown-linux-gnu:${LD_LIBRARY_PATH:-}"
+
+          export OMP_NUM_THREADS=4
+          export LIBOMP_NUM_HIDDEN_HELPER_THREADS=4
+          export OMPCLUSTER_NUM_EXEC_EVENT_HANDLERS=2
+          export UCX_TLS=self,sysv,tcp
+          export OMP_TARGET_OFFLOAD=MANDATORY
+          export LIBOMPTARGET_INFO=0
+
+          unset LIBOMPTARGET_DEBUG
+          unset OMPCLUSTER_RUNTIME
+
+          cd task-bench
+
+          run_taskwait() {
+            local name="$1"
+            local scheduler="$2"
+            local tdg="$3"
+            local binary="$4"
+            local expected="$5"
+            local log="${name}.log"
+            local rc=0
+
+            export OMPCLUSTER_SCHEDULER="$scheduler"
+            export KMP_MAX_TDGS="$tdg"
+
+            unset OMPCLUSTER_INITIAL_SCHEDULE_POLICY
+            unset OMPCLUSTER_INITIAL_ITERATION_NUMBER
+
+            echo "=== TASKWAIT: $name ==="
+
+            timeout --signal=TERM --kill-after=5s 30s \
+              mpirun -l \
+                -np 2 "$TC/bin/llvm-offload-mpi-proxy-device" \
+                : -np 1 "./ompcluster/$binary" \
+              > "$log" 2>&1 || rc=$?
+
+            grep -E 'MULTI_COPY|FAIL|fatal error|Assertion' "$log" \
+              | tail -20 || true
+
+            if [[ "$rc" -ne 0 ]] ||
+               ! grep -q "$expected" "$log"; then
+              echo "::error::Taskwait test $name failed (exit=$rc)"
+              tail -80 "$log"
+              return 1
+            fi
+
+            echo "PASS: $name"
+          }
+
+          run_taskwait taskwait-dmdas dmdas 0 main_taskwait 'MULTI_COPY_PASS N=16'
+          run_taskwait taskwait-dmdas-tdg dmdas 1 main_taskwait_tdg 'MULTI_COPY_TDG_PASS N=16'
+          run_taskwait taskwait-heft-legacy-tdg heft_legacy 1 main_taskwait_tdg 'MULTI_COPY_TDG_PASS N=16'
+          run_taskwait taskwait-heft heft 0 main_taskwait 'MULTI_COPY_PASS N=16'
 
       - name: Build instrumented GPU runtime
         run: |

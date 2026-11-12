@@ -2504,6 +2504,11 @@ static kmp_int32 __kmpc_omp_taskwait_template(ident_t *loc_ref, kmp_int32 gtid,
          thread->th.th_task_team->tt.tt_hidden_helper_task_encountered);
 
     if (must_wait) {
+      // Ensure DMDAS tasks can progress before waiting for their completion.
+      if (__kmp_use_dmdas_runtime()) {
+        __kmp_dmdas_run_ready_tasks();
+      }
+
       kmp_flag_32<false, false> flag(
           RCAST(std::atomic<kmp_uint32> *,
                 &(taskdata->td_incomplete_child_tasks)),
