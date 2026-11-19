@@ -305,6 +305,22 @@ struct ProxyDevice {
     co_return (co_await RequestManager);
   }
 
+  // CCR_PROFILE_V1
+  static double ccrNowMs() {
+    using Clock = std::chrono::steady_clock;
+    return std::chrono::duration<double, std::milli>(
+               Clock::now().time_since_epoch())
+        .count();
+  }
+
+  static void ccrLog(const char *Kind, int Device, int64_t Bytes,
+                     double Milliseconds) {
+    if (!std::getenv("OMPC_CCR_PROFILE"))
+      return;
+    std::fprintf(stderr, "[CCR] kind=%s device=%d bytes=%lld ms=%.9f\n", Kind,
+                 Device, static_cast<long long>(Bytes), Milliseconds);
+  }
+
   EventTy submit(MPIRequestManagerTy RequestManager) {
     void *TgtPtr = nullptr, *HstAsyncInfoPtr = nullptr;
     int64_t Size = 0;
@@ -326,10 +342,13 @@ struct ProxyDevice {
         EventSystem.mapDeviceId(RequestManager.DeviceId);
 
     PluginDataHandle DataHandler(&PluginManager, PluginId, DeviceId, Size);
+    const double CcrStart = ccrNowMs();
     RequestManager.receiveInBatchs(DataHandler.HstPtr, Size);
 
     if (auto Error = co_await RequestManager; Error)
       co_return Error;
+
+    ccrLog("mpi_submit", RequestManager.DeviceId, Size, ccrNowMs() - CcrStart);
 
     auto *TgtAsyncInfo = MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
 
@@ -397,12 +416,17 @@ struct ProxyDevice {
     if (!DeviceOpStatus)
       co_return (co_await RequestManager);
 
+    const double CcrStart = ccrNowMs();
     RequestManager.sendInBatchs(DataHandler.HstPtr, Size);
 
     // Event completion notification
     RequestManager.send(nullptr, 0, MPI_BYTE);
 
-    co_return (co_await RequestManager);
+    auto CcrError = co_await RequestManager;
+    if (!CcrError)
+      ccrLog("mpi_retrieve", RequestManager.DeviceId, Size,
+             ccrNowMs() - CcrStart);
+    co_return CcrError;
   }
 
   EventTy exchange(MPIRequestManagerTy RequestManager) {
@@ -765,7 +789,22 @@ struct ProxyDevice {
       REPORT("Synchronize event failed with msg: %s\n",
              toString(std::move(Error)).data());
 
-    double KernelTime = finishKernelTiming(HstAsyncInfoPtr, PluginId, DeviceId);
+    double KernelTime = 0.0;
+    auto *AsyncHandle = MapAsyncInfo(HstAsyncInfoPtr, PluginId, DeviceId);
+
+    {
+      std::lock_guard<std::mutex> Lock(AsyncHandle->AsyncInfoMutex);
+      auto *TgtAsyncInfo = AsyncHandle->AsyncInfoPtr.get();
+
+      KernelTime = TgtAsyncInfo->KernelExecutionTime;
+      TgtAsyncInfo->KernelExecutionTime = 0.0;
+
+      if (!AsyncHandle->KernelLaunchTimes.empty())
+        AsyncHandle->KernelLaunchTimes.pop_front();
+    }
+
+    if (KernelTime > 0.0)
+      ccrLog("compute", RequestManager.DeviceId, 0, KernelTime * 1000.0);
 
     /*printf(
         "REAL ASYNC KERNEL TIME path=synchronize async=%p time=%.9f\n",
@@ -891,6 +930,9 @@ struct ProxyDevice {
       if (!AsyncHandle->KernelLaunchTimes.empty())
         AsyncHandle->KernelLaunchTimes.pop_front();
     }
+
+    if (KernelTime > 0.0)
+      ccrLog("compute", RequestManager.DeviceId, 0, KernelTime * 1000.0);
 
     RequestManager.send(&KernelTime, 1, MPI_DOUBLE);
 
