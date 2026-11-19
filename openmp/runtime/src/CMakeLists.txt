@@ -11,7 +11,7 @@
 include(ExtendPath)
 
 # The generated headers will be placed in clang's resource directory if present.
-if(OPENMP_STANDALONE_BUILD OR NOT LLVM_RUNTIMES_BUILD)
+if(NOT LLVM_TREE_AVAILABLE)
   set(LIBOMP_HEADERS_INTDIR ${CMAKE_CURRENT_BINARY_DIR})
 else()
   set(LIBOMP_HEADERS_INTDIR ${LLVM_BINARY_DIR}/${LIBOMP_HEADERS_INSTALL_PATH})
@@ -102,6 +102,13 @@ else()
     kmp_dispatch.cpp
     kmp_lock.cpp
     kmp_sched.cpp
+    kmp_target_basescheduler.cpp
+    kmp_target_heft.cpp
+    kmp_target_legacy_basescheduler.cpp
+    kmp_target_legacy_heft.cpp
+    kmp_target_roundrobin.cpp
+    kmp_target_graph_roundrobin.cpp
+    kmp_target_scheduler.cpp
     kmp_collapse.cpp
   )
   if(WIN32)
@@ -132,8 +139,10 @@ else()
   libomp_append(LIBOMP_CXXFILES kmp_stats.cpp LIBOMP_STATS)
   libomp_append(LIBOMP_CXXFILES kmp_stats_timing.cpp LIBOMP_STATS)
   libomp_append(LIBOMP_CXXFILES kmp_taskdeps.cpp)
+  libomp_append(LIBOMP_CXXFILES kmp_dmdas.cpp)
   libomp_append(LIBOMP_CXXFILES kmp_cancel.cpp)
-endif()
+  libomp_append(LIBOMP_CXXFILES kmp_target.cpp LIBOMP_OMPX_TASKGRAPH)
+  endif()
 # Files common to stubs and normal library
 libomp_append(LIBOMP_CXXFILES kmp_ftn_cdecl.cpp)
 libomp_append(LIBOMP_CXXFILES kmp_ftn_extra.cpp)

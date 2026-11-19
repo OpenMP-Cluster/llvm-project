@@ -333,6 +333,7 @@ void handleTargetOutcome(bool Success, ident_t *Loc) {
       FATAL_MESSAGE0(
           1, "failure of target construct while offloading is mandatory");
     } else {
+
       if (getInfoLevel() & OMP_INFOTYPE_DUMP_TABLE) {
         auto ExclusiveDevicesAccessor = PM->getExclusiveDevicesAccessor();
         for (auto &Device : PM->devices(ExclusiveDevicesAccessor))

@@ -1,0 +1,110 @@
+name: OMPC CPU CI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  topology-diagnostic:
+    name: Diagnose GitHub runner CPU topology
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inspect CPU topology
+        run: |
+          echo "=== CPU model and topology ==="
+          lscpu
+          echo "=== CPU affinity ==="
+          taskset -pc $$
+          echo "=== Linux CPU topology ==="
+          lscpu -e=CPU,CORE,SOCKET,ONLINE
+          echo "=== Thread siblings ==="
+          for f in /sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list; do
+            echo "$f: $(cat "$f")"
+          done
+          echo "=== CPUINFO topology ==="
+          grep -E '^(processor|physical id|core id|apicid|initial apicid)[[:space:]]*:' /proc/cpuinfo
+
+
+      - name: Inspect installed OpenMP runtimes
+        run: |
+          echo "=== Clang ==="
+          clang --version || true
+          echo "=== OpenMP libraries ==="
+          ldconfig -p | grep -E 'lib(omp|gomp)\.so' || true
+          echo "=== Installed OpenMP packages ==="
+          dpkg-query -W 'libomp*' 2>/dev/null || true
+
+
+      - name: Inspect legacy APIC CPUID decoding
+        run: |
+          gcc -Wall -Wextra -Werror -O0 \
+            .github/scripts/ompc-cpuid-diagnostic.c \
+            -o /tmp/ompc-cpuid-diagnostic
+          /tmp/ompc-cpuid-diagnostic
+
+      - name: Compare LLVM 18 OpenMP topology methods
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libomp-18-dev
+
+          clang-18 -fopenmp -D_GNU_SOURCE \
+            openmp/runtime/test/affinity/omp-places.c \
+            -o /tmp/omp-places-diagnostic
+
+          for method in all cpuinfo apicid; do
+            echo "=== KMP_TOPOLOGY_METHOD=$method ==="
+            KMP_TOPOLOGY_METHOD="$method" \
+            KMP_AFFINITY=verbose \
+            OMP_PLACES=cores \
+            /tmp/omp-places-diagnostic && status=0 || status=$?
+            echo "EXIT_STATUS=$status"
+          done
+
+  ompc-cpu:
+    name: Build and test OMPC (CPU)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build cmake clang lld \
+            libmpich-dev mpich python3
+
+      - name: Configure LLVM and OMPC
+        run: |
+          cmake -S llvm -B build-ompc-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_ENABLE_PROJECTS=clang \
+            -DLLVM_ENABLE_RUNTIMES="openmp;offload" \
+            -DLLVM_ENABLE_ASSERTIONS=ON \
+            -DLLVM_TARGETS_TO_BUILD=X86 \
+            -DLIBOMPTARGET_BUILD_DEVICERTL_BCLIB=OFF \
+            -DRUNTIMES_CMAKE_ARGS="-DMPI_C_COMPILER=/usr/bin/mpicc;-DMPI_CXX_COMPILER=/usr/bin/mpicxx"
+
+      - name: Build OMPC
+        run: cmake --build build-ompc-ci --target clang runtimes --parallel 2
+
+      - name: Diagnose CPU affinity
+        run: |
+          echo "=== CPU topology ==="
+          lscpu
+          echo "=== CPU affinity ==="
+          taskset -pc $$
+          echo "=== CPU topology details ==="
+          lscpu -e=CPU,CORE,SOCKET,ONLINE
+
+      - name: Run OpenMP tests
+        env:
+          CHECK_OPENMP_ENV: KMP_TOPOLOGY_METHOD=cpuinfo
+        run: cmake --build build-ompc-ci --target check-openmp --parallel 2

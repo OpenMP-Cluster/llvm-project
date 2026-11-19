@@ -241,6 +241,9 @@ public:
   /// otherwise.
   bool isDone() const;
 
+  double getKernelExecutionTime() const {
+  return AsyncInfo.KernelExecutionTime;
+}
   /// Add a new post-processing function to be executed after synchronization.
   ///
   /// \param[in] Function is a templated function (e.g., function pointers,
@@ -268,6 +271,16 @@ private:
   /// \returns true if empty, false otherwise.
   bool isQueueEmpty() const;
 };
+
+extern "C" int32_t
+  __kmpc_target_task_current_task_id()
+      __attribute__((weak));
+
+extern "C" void
+  __kmpc_dmdas_record_kernel_time(
+      int32_t task_id,
+      double kernel_time)
+      __attribute__((weak));
 
 // Wrapper for task stored async info objects.
 class TaskAsyncInfoWrapperTy {
@@ -326,6 +339,36 @@ public:
     // deallocating the handle.
     if (!AsyncInfo->isDone())
       return;
+
+    double KernelTime =
+        AsyncInfo->getKernelExecutionTime();
+
+    if (KernelTime > 0.0) {
+
+  int32_t TaskId = -1;
+
+  if (__kmpc_target_task_current_task_id)
+        TaskId =
+            __kmpc_target_task_current_task_id();
+
+      /*printf(
+          "LIBOMPTARGET KERNEL COMPLETE "
+          "gtid=%d task_id=%d time=%.9f\n",
+          ExecThreadID,
+          TaskId,
+          KernelTime);
+      fflush(stdout);*/
+
+      if (TaskId != -1 &&
+          __kmpc_dmdas_record_kernel_time) {
+
+        __kmpc_dmdas_record_kernel_time(
+            TaskId,
+            KernelTime);
+      }
+
+    }
+
 
     // Delete the handle and unset it from the OpenMP task data.
     delete AsyncInfo;
@@ -500,6 +543,8 @@ int __tgt_activate_record_replay(int64_t DeviceId, uint64_t MemorySize,
 
 void __tgt_target_memtask(void *HstPtr, int64_t Size, int64_t DstDevice,
                           int64_t SrcDevice);
+
+int __tgt_target_get_device_type(int64_t DeviceId);
 
 #ifdef __cplusplus
 }

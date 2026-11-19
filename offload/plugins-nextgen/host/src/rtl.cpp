@@ -12,8 +12,11 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstdio>
 #include <ffi.h>
 #include <string>
+#include <time.h>
+#include <unistd.h>
 #include <unordered_map>
 
 #include "Shared/Debug.h"
@@ -109,7 +112,55 @@ struct GenELF64KernelTy : public GenericKernelTy {
 
     // Call the kernel function through libffi.
     long Return;
+
+    static std::atomic<int> ActiveKernels{0};
+    static std::atomic<int> MaxActiveKernels{0};
+
+    int active = ActiveKernels.fetch_add(1) + 1;
+
+    int current_max = MaxActiveKernels.load();
+
+    while (active > current_max &&
+           !MaxActiveKernels.compare_exchange_weak(current_max, active)) {
+    }
+
+    /*printf(
+        "KERNEL CONCURRENCY START "
+        "pid=%d device=%d active=%d max=%d\n",
+        static_cast<int>(getpid()),
+        GenericDevice.getDeviceId(),
+        active,
+        MaxActiveKernels.load());
+
+    fflush(stdout);*/
+
+    struct timespec Start, End;
+    clock_gettime(CLOCK_MONOTONIC, &Start);
+
     ffi_call(&Cif, Func, &Return, (void **)LaunchParams.Ptrs);
+
+    clock_gettime(CLOCK_MONOTONIC, &End);
+
+    active = ActiveKernels.fetch_sub(1) - 1;
+
+    /*printf(
+        "KERNEL CONCURRENCY end "
+        "pid=%d device=%d active=%d max=%d\n",
+        static_cast<int>(getpid()),
+        GenericDevice.getDeviceId(),
+        active,
+        MaxActiveKernels.load());*/
+
+    fflush(stdout);
+
+    double KernelTime =
+        (End.tv_sec - Start.tv_sec) + (End.tv_nsec - Start.tv_nsec) / 1e9;
+
+    // Store the real synchronous CPU kernel execution time.
+    __tgt_async_info *AsyncInfoPtr = AsyncInfoWrapper;
+
+    if (AsyncInfoPtr)
+      AsyncInfoPtr->KernelExecutionTime = KernelTime;
 
     return Plugin::success();
   }
@@ -165,6 +216,9 @@ struct GenELF64DeviceTy : public GenericDeviceTy {
 
     return *GenELF64Kernel;
   }
+
+  /// ELF64 device returns its device type as CPU_DEVICE
+  DeviceType getDeviceType() const override { return DeviceType::CPU_DEVICE; }
 
   /// Set the current context to this device, which is a no-op.
   Error setContext() override { return Plugin::success(); }
@@ -270,7 +324,9 @@ struct GenELF64DeviceTy : public GenericDeviceTy {
   /// Retrieve data from the device (device to host transfer).
   Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
                          AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+
     std::memcpy(HstPtr, TgtPtr, Size);
+
     return Plugin::success();
   }
 
